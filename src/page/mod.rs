@@ -1,5 +1,5 @@
-mod header;
 mod data;
+mod header;
 mod index;
 mod page;
 mod space_info;
@@ -10,7 +10,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::header::GeneralHeader;
 
-pub use index::IndexPage;
+pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::SpaceInfo;
 
 // TODO: Move to config

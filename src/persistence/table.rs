@@ -1,4 +1,4 @@
-pub trait PersistTable {
+pub trait PersistableTable {
     const TABLE_NAME: &'static str;
     type Space;
 

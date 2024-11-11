@@ -63,7 +63,17 @@ impl Generator {
             .struct_def
             .fields
             .iter()
-            .map(|f| (Literal::string(f.ident.as_ref().unwrap().to_string().as_str()), f.ident.as_ref().unwrap(), !f.ty.to_token_stream().to_string().contains("lockfree")))
+            .map(|f| {
+                (
+                    Literal::string(f.ident.as_ref().unwrap().to_string().as_str()),
+                    f.ident.as_ref().unwrap(),
+                    !f.ty
+                        .to_token_stream()
+                        .to_string()
+                        .to_lowercase()
+                        .contains("lockfree"),
+                )
+            })
             .map(|(l, i, is_unique)| {
                 let index_call = if is_unique {
                     quote! {
@@ -86,7 +96,12 @@ impl Generator {
             .struct_def
             .fields
             .iter()
-            .map(|f| (Literal::string(f.ident.as_ref().unwrap().to_string().as_str()), f.ident.as_ref().unwrap()))
+            .map(|f| {
+                (
+                    Literal::string(f.ident.as_ref().unwrap().to_string().as_str()),
+                    f.ident.as_ref().unwrap(),
+                )
+            })
             .map(|(l, i)| {
                 quote! {
                     #i: self.get_pages_by_name(#l),
@@ -95,14 +110,17 @@ impl Generator {
             .collect();
 
         Ok(quote! {
-            impl PersistIndex for #ident {
+            impl PersistableIndex for #ident {
                 type PersistedIndex = #name_ident;
 
                 fn get_index_names(&self) -> Vec<&str> {
                     vec![#(#field_names_lits)*]
                 }
 
-                fn get_pages_by_name<T>(&self, name: &str) -> Vec<IndexPage<T>> {
+                fn get_pages_by_name<T>(&self, name: &str) -> Vec<IndexPage<T>>
+                where
+                    T: Clone + Ord + SizeMeasurable + 'static,
+                {
                     match name {
                         #(#field_names_match)*
                     }
