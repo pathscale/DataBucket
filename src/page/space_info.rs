@@ -2,7 +2,7 @@
 
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::page::r#type::PageType;
+use crate::page::ty::PageType;
 use crate::page::GeneralHeader;
 use crate::{page, space};
 

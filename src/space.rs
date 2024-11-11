@@ -8,7 +8,7 @@ use crate::page;
 /// [`Space`] represents whole [`WorkTable`] file.
 #[derive(Debug, Default)]
 pub struct Space {
-    pub pages: Vec<page::General>,
+    //pub pages: Vec<page::General<>>,
 }
 
 /// Represents space's identifier.

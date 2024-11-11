@@ -78,9 +78,8 @@ pub struct General<Inner> {
 
 #[cfg(test)]
 mod tests {
-    use crate::page;
-    use crate::page::r#type::PageType;
-    use crate::page::{GeneralHeader, HEADER_LENGTH, INNER_PAGE_LENGTH, PAGE_SIZE};
+    use crate::page::ty::PageType;
+    use crate::page::{GeneralHeader, HEADER_LENGTH};
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {
