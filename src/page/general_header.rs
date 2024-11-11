@@ -2,9 +2,9 @@
 
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::space;
 use crate::page;
 use crate::page::r#type::PageType;
+use crate::space;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
@@ -25,7 +25,7 @@ impl GeneralHeader {
             previous_id: 0.into(),
             next_id: 0.into(),
             page_type: type_,
-            space_id
+            space_id,
         }
     }
 
@@ -38,7 +38,7 @@ impl GeneralHeader {
             previous_id: self.page_id,
             next_id: 0.into(),
             page_type: self.page_type,
-            space_id: self.space_id
+            space_id: self.space_id,
         }
     }
 
@@ -51,7 +51,7 @@ impl GeneralHeader {
             previous_id: self.page_id,
             next_id: 0.into(),
             page_type,
-            space_id: self.space_id
+            space_id: self.space_id,
         }
     }
 }

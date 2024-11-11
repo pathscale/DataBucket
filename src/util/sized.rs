@@ -29,7 +29,6 @@ impl SizeMeasurable for Link {
     }
 }
 
-
 // That was found on practice... Check unit test for proofs that works.
 impl SizeMeasurable for String {
     fn approx_size(&self) -> usize {

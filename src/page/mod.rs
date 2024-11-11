@@ -1,13 +1,14 @@
-mod r#type;
-mod space_info;
-mod index;
 mod general_header;
+mod index;
+mod space_info;
+mod r#type;
 
 use derive_more::{Display, From};
 use rkyv::{with::Skip, Archive, Deserialize, Serialize};
 
 use crate::page::general_header::GeneralHeader;
 
+pub use index::IndexPage;
 pub use space_info::SpaceInfo;
 
 // TODO: Move to config
@@ -96,8 +97,8 @@ impl Empty {
 #[cfg(test)]
 mod tests {
     use crate::page;
-    use crate::page::{GeneralHeader, HEADER_LENGTH, INNER_PAGE_LENGTH, PAGE_SIZE};
     use crate::page::r#type::PageType;
+    use crate::page::{GeneralHeader, HEADER_LENGTH, INNER_PAGE_LENGTH, PAGE_SIZE};
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {

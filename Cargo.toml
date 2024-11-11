@@ -1,3 +1,6 @@
+[workspace]
+members = ["codegen"]
+
 [package]
 name = "data_bucket"
 version = "0.1.0"
@@ -7,3 +10,4 @@ edition = "2021"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
 rkyv = {version = "0.7.45", features = ["uuid"]}
 scc = "2.1.16"
+lockfree = "0.5.1"

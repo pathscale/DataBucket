@@ -15,8 +15,8 @@ pub struct Link {
 
 #[cfg(test)]
 mod tests {
-    use crate::link::LINK_LENGTH;
     use crate::link::Link;
+    use crate::link::LINK_LENGTH;
 
     #[test]
     fn link_length_valid() {
