@@ -8,15 +8,15 @@ pub const LINK_LENGTH: usize = 12;
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
 pub struct Link {
-    pub page_id: page::Id,
+    pub page_id: page::PageId,
     pub offset: u32,
     pub length: u32,
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::link::LINK_LENGTH;
     use crate::link::Link;
+    use crate::link::LINK_LENGTH;
 
     #[test]
     fn link_length_valid() {

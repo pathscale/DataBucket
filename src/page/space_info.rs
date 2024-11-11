@@ -2,9 +2,9 @@
 
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::{page, space};
+use crate::page::ty::PageType;
 use crate::page::GeneralHeader;
-use crate::page::r#type::PageType;
+use crate::{page, space};
 
 pub type SpaceName = String;
 
@@ -19,28 +19,24 @@ pub type SpaceName = String;
 
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
-#[derive(
-    Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct SpaceInfo {
     pub id: space::Id,
     pub page_count: u32,
     pub name: SpaceName,
-    pub primary_key_intervals: Vec<Interval>
+    pub primary_key_intervals: Vec<Interval>,
 }
 
 /// Represents some interval between values.
-#[derive(
-    Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Interval(usize, usize);
 
 impl From<SpaceInfo> for page::General<SpaceInfo> {
     fn from(info: SpaceInfo) -> Self {
         let header = GeneralHeader {
-            page_id: page::Id::from(0),
-            previous_id: page::Id::from(0),
-            next_id: page::Id::from(0),
+            page_id: page::PageId::from(0),
+            previous_id: page::PageId::from(0),
+            next_id: page::PageId::from(0),
             page_type: PageType::SpaceInfo,
             space_id: info.id,
         };

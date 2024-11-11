@@ -1,12 +1,14 @@
-mod r#type;
-mod space_info;
+mod data;
+mod header;
 mod index;
-mod general_header;
+mod page;
+mod space_info;
+mod ty;
 
 use derive_more::{Display, From};
 use rkyv::{with::Skip, Archive, Deserialize, Serialize};
 
-use crate::page::general_header::GeneralHeader;
+use crate::page::header::GeneralHeader;
 
 pub use space_info::SpaceInfo;
 
@@ -50,16 +52,16 @@ pub const INNER_PAGE_LENGTH: usize = PAGE_SIZE - HEADER_LENGTH;
     PartialOrd,
     Serialize,
 )]
-pub struct Id(u32);
+pub struct PageId(u32);
 
-impl Id {
+impl PageId {
     pub fn next(self) -> Self {
-        Id(self.0 + 1)
+        PageId(self.0 + 1)
     }
 }
 
-impl From<Id> for usize {
-    fn from(value: Id) -> Self {
+impl From<PageId> for usize {
+    fn from(value: PageId) -> Self {
         value.0 as usize
     }
 }
@@ -79,13 +81,13 @@ pub struct General<Inner = Empty> {
 )]
 pub struct Empty {
     #[with(Skip)]
-    pub page_id: Id,
+    pub page_id: PageId,
 
     pub bytes: [u8; INNER_PAGE_LENGTH],
 }
 
 impl Empty {
-    pub fn new(id: Id) -> Self {
+    pub fn new(id: PageId) -> Self {
         Self {
             page_id: id,
             bytes: [0; PAGE_SIZE - HEADER_LENGTH],
@@ -96,8 +98,8 @@ impl Empty {
 #[cfg(test)]
 mod tests {
     use crate::page;
+    use crate::page::ty::PageType;
     use crate::page::{GeneralHeader, HEADER_LENGTH, INNER_PAGE_LENGTH, PAGE_SIZE};
-    use crate::page::r#type::PageType;
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {
