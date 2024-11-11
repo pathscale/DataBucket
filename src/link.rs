@@ -8,7 +8,7 @@ pub const LINK_LENGTH: usize = 12;
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
 pub struct Link {
-    pub page_id: page::Id,
+    pub page_id: page::PageId,
     pub offset: u32,
     pub length: u32,
 }

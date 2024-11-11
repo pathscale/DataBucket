@@ -1,12 +1,14 @@
 mod general_header;
+mod header;
 mod index;
+mod page;
 mod space_info;
 mod r#type;
 
 use derive_more::{Display, From};
-use rkyv::{with::Skip, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::page::general_header::GeneralHeader;
+use crate::page::header::GeneralHeader;
 
 pub use index::IndexPage;
 pub use space_info::SpaceInfo;
@@ -51,16 +53,16 @@ pub const INNER_PAGE_LENGTH: usize = PAGE_SIZE - HEADER_LENGTH;
     PartialOrd,
     Serialize,
 )]
-pub struct Id(u32);
+pub struct PageId(u32);
 
-impl Id {
+impl PageId {
     pub fn next(self) -> Self {
-        Id(self.0 + 1)
+        PageId(self.0 + 1)
     }
 }
 
-impl From<Id> for usize {
-    fn from(value: Id) -> Self {
+impl From<PageId> for usize {
+    fn from(value: PageId) -> Self {
         value.0 as usize
     }
 }
@@ -69,29 +71,9 @@ impl From<Id> for usize {
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
-pub struct General<Inner = Empty> {
+pub struct General<Inner> {
     pub header: GeneralHeader,
     pub inner: Inner,
-}
-
-/// Empty page. It's default allocated page.
-#[derive(
-    Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-pub struct Empty {
-    #[with(Skip)]
-    pub page_id: Id,
-
-    pub bytes: [u8; INNER_PAGE_LENGTH],
-}
-
-impl Empty {
-    pub fn new(id: Id) -> Self {
-        Self {
-            page_id: id,
-            bytes: [0; PAGE_SIZE - HEADER_LENGTH],
-        }
-    }
 }
 
 #[cfg(test)]
@@ -110,34 +92,11 @@ mod tests {
         }
     }
 
-    fn get_general_page() -> page::General {
-        page::General {
-            header: get_general_header(),
-            inner: page::Empty::new(1.into()),
-        }
-    }
-
     #[test]
     fn general_header_length_valid() {
         let header = get_general_header();
         let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
 
         assert_eq!(bytes.len(), HEADER_LENGTH)
-    }
-
-    #[test]
-    fn general_empty_page_valid() {
-        let page = get_general_page();
-        let bytes = rkyv::to_bytes::<_, 4096>(&page).unwrap();
-
-        assert_eq!(bytes.len(), PAGE_SIZE)
-    }
-
-    #[test]
-    fn empty_page_valid() {
-        let page = page::Empty::new(1.into());
-        let bytes = rkyv::to_bytes::<_, 4096>(&page).unwrap();
-
-        assert_eq!(bytes.len(), INNER_PAGE_LENGTH)
     }
 }

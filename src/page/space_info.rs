@@ -34,9 +34,9 @@ pub struct Interval(usize, usize);
 impl From<SpaceInfo> for page::General<SpaceInfo> {
     fn from(info: SpaceInfo) -> Self {
         let header = GeneralHeader {
-            page_id: page::Id::from(0),
-            previous_id: page::Id::from(0),
-            next_id: page::Id::from(0),
+            page_id: page::PageId::from(0),
+            previous_id: page::PageId::from(0),
+            next_id: page::PageId::from(0),
             page_type: PageType::SpaceInfo,
             space_id: info.id,
         };

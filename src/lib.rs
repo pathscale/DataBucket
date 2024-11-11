@@ -1,7 +1,7 @@
-mod link;
-mod page;
+pub mod link;
+pub mod page;
 pub mod persistence;
 mod space;
-mod util;
+pub mod util;
 
 pub use link::Link;
