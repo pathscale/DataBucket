@@ -1,9 +1,9 @@
-mod general_header;
 mod header;
+mod data;
 mod index;
 mod page;
 mod space_info;
-mod r#type;
+mod ty;
 
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
