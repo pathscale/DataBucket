@@ -6,7 +6,7 @@ mod space_info;
 mod ty;
 
 use derive_more::{Display, From};
-use rkyv::{with::Skip, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::header::GeneralHeader;
 
@@ -70,36 +70,15 @@ impl From<PageId> for usize {
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
-pub struct General<Inner = Empty> {
+pub struct General<Inner> {
     pub header: GeneralHeader,
     pub inner: Inner,
 }
 
-/// Empty page. It's default allocated page.
-#[derive(
-    Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
-pub struct Empty {
-    #[with(Skip)]
-    pub page_id: PageId,
-
-    pub bytes: [u8; INNER_PAGE_LENGTH],
-}
-
-impl Empty {
-    pub fn new(id: PageId) -> Self {
-        Self {
-            page_id: id,
-            bytes: [0; PAGE_SIZE - HEADER_LENGTH],
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::page;
     use crate::page::ty::PageType;
-    use crate::page::{GeneralHeader, HEADER_LENGTH, INNER_PAGE_LENGTH, PAGE_SIZE};
+    use crate::page::{GeneralHeader, HEADER_LENGTH};
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {
@@ -111,34 +90,11 @@ mod tests {
         }
     }
 
-    fn get_general_page() -> page::General {
-        page::General {
-            header: get_general_header(),
-            inner: page::Empty::new(1.into()),
-        }
-    }
-
     #[test]
     fn general_header_length_valid() {
         let header = get_general_header();
         let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
 
         assert_eq!(bytes.len(), HEADER_LENGTH)
-    }
-
-    #[test]
-    fn general_empty_page_valid() {
-        let page = get_general_page();
-        let bytes = rkyv::to_bytes::<_, 4096>(&page).unwrap();
-
-        assert_eq!(bytes.len(), PAGE_SIZE)
-    }
-
-    #[test]
-    fn empty_page_valid() {
-        let page = page::Empty::new(1.into());
-        let bytes = rkyv::to_bytes::<_, 4096>(&page).unwrap();
-
-        assert_eq!(bytes.len(), INNER_PAGE_LENGTH)
     }
 }
