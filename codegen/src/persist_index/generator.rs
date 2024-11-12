@@ -3,12 +3,22 @@ use quote::__private::Span;
 use quote::{quote, ToTokens};
 use syn::ItemStruct;
 
+use std::collections::HashMap;
+
 pub struct Generator {
-    pub struct_def: ItemStruct,
+    struct_def: ItemStruct,
+    field_types: HashMap<Ident, TokenStream>,
 }
 
 impl Generator {
-    pub fn gen_persist_type(&self) -> syn::Result<TokenStream> {
+    pub fn new(struct_def: ItemStruct) -> Self {
+        Self {
+            struct_def,
+            field_types: HashMap::new()
+        }
+    }
+
+    pub fn gen_persist_type(&mut self) -> syn::Result<TokenStream> {
         let name_ident = Ident::new(
             format!("{}Persisted", self.struct_def.ident).as_str(),
             Span::mixed_site(),
@@ -31,6 +41,7 @@ impl Generator {
             .zip(types)
             .map(|(i, t)| {
                 let t: TokenStream = t.parse().unwrap();
+                self.field_types.insert(i.clone(), t.clone());
                 quote! {
                     #i: Vec<IndexPage<#t>>,
                 }
@@ -51,6 +62,8 @@ impl Generator {
             format!("{}Persisted", self.struct_def.ident).as_str(),
             Span::mixed_site(),
         );
+        let name = self.struct_def.ident.to_string().replace("Index", "");
+        let const_name = Ident::new(format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(), Span::mixed_site());
 
         let field_names_lits: Vec<_> = self
             .struct_def
@@ -59,7 +72,7 @@ impl Generator {
             .map(|f| Literal::string(f.ident.as_ref().unwrap().to_string().as_str()))
             .map(|l| quote! { #l, })
             .collect();
-        let field_names_match: Vec<_> = self
+        let field_names_init: Vec<_> = self
             .struct_def
             .fields
             .iter()
@@ -75,36 +88,15 @@ impl Generator {
                 )
             })
             .map(|(l, i, is_unique)| {
-                let index_call = if is_unique {
+                let ty = self.field_types.get(&i).unwrap();
+                if is_unique {
                     quote! {
-                        map_unique_tree_index(&self.#i)
+                        #i: map_unique_tree_index::<#ty, #const_name>(&self.#i),
                     }
                 } else {
                     quote! {
-                        map_tree_index(&self.#i)
+                        #i: map_tree_index::<#ty, #const_name>(&self.#i),
                     }
-                };
-                quote! {
-                    #l => {
-                        #index_call
-                    },
-                }
-            })
-            .collect();
-
-        let field_names_init: Vec<_> = self
-            .struct_def
-            .fields
-            .iter()
-            .map(|f| {
-                (
-                    Literal::string(f.ident.as_ref().unwrap().to_string().as_str()),
-                    f.ident.as_ref().unwrap(),
-                )
-            })
-            .map(|(l, i)| {
-                quote! {
-                    #i: self.get_pages_by_name(#l),
                 }
             })
             .collect();
@@ -115,15 +107,6 @@ impl Generator {
 
                 fn get_index_names(&self) -> Vec<&str> {
                     vec![#(#field_names_lits)*]
-                }
-
-                fn get_pages_by_name<T>(&self, name: &str) -> Vec<IndexPage<T>>
-                where
-                    T: Clone + Ord + SizeMeasurable + 'static,
-                {
-                    match name {
-                        #(#field_names_match)*
-                    }
                 }
 
                 fn get_persisted_index(&self) -> Self::PersistedIndex {

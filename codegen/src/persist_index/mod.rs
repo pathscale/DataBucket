@@ -15,9 +15,7 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
             return Err(syn::Error::new(input.span(), err.to_string()));
         }
     };
-    let gen = Generator {
-        struct_def: input_fn,
-    };
+    let mut gen = Generator::new(input_fn);
 
     let type_def = gen.gen_persist_type()?;
     let impl_def = gen.gen_persist_impl()?;
