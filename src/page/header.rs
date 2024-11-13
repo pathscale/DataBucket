@@ -33,9 +33,10 @@ impl GeneralHeader {
     /// Creates a new [`GeneralHeader`] for a page that follows page with given
     /// header. It means that [`PageType`] and [`space::Id`] are same and
     /// old [`page::PageId`] will be `previous_id`.
-    pub fn follow(&self) -> Self {
+    pub fn follow(&mut self) -> Self {
+        self.next_id = self.page_id.next();
         Self {
-            page_id: self.page_id.next(),
+            page_id: self.next_id,
             previous_id: self.page_id,
             next_id: 0.into(),
             page_type: self.page_type,
@@ -46,9 +47,10 @@ impl GeneralHeader {
     /// Creates a new [`GeneralHeader`] for a page that follows page with given
     /// header but with different [`PageType`]. [`space::Id`] is same and old
     /// [`page::PageId`] will be `previous_id`.
-    pub fn follow_with(&self, page_type: PageType) -> Self {
+    pub fn follow_with(&mut self, page_type: PageType) -> Self {
+        self.next_id = self.page_id.next();
         Self {
-            page_id: self.page_id.next(),
+            page_id: self.next_id,
             previous_id: self.page_id,
             next_id: 0.into(),
             page_type,

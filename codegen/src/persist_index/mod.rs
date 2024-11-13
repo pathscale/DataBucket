@@ -4,17 +4,13 @@ use syn::parse::Parse;
 use syn::spanned::Spanned;
 
 use crate::persist_index::generator::Generator;
+use crate::persist_index::parser::Parser;
 
 mod generator;
 mod parser;
 
 pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
-    let input_fn = match syn::parse2::<syn::ItemStruct>(input.clone()) {
-        Ok(data) => data,
-        Err(err) => {
-            return Err(syn::Error::new(input.span(), err.to_string()));
-        }
-    };
+    let input_fn = Parser::parse_struct(input)?;
     let mut gen = Generator::new(input_fn);
 
     let type_def = gen.gen_persist_type()?;

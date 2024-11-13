@@ -1,4 +1,5 @@
 mod persist_index;
+mod persist_table;
 
 use proc_macro::TokenStream;
 
