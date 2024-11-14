@@ -4,7 +4,7 @@ use syn::ItemStruct;
 mod space;
 
 pub struct Generator {
-    struct_def: ItemStruct,
-    pk_ident: Ident,
-    index_ident: Ident,
+    pub struct_def: ItemStruct,
+    pub pk_ident: Ident,
+    pub index_ident: Ident,
 }

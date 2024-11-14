@@ -14,7 +14,7 @@ impl Generator {
     pub fn new(struct_def: ItemStruct) -> Self {
         Self {
             struct_def,
-            field_types: HashMap::new()
+            field_types: HashMap::new(),
         }
     }
 
@@ -43,7 +43,7 @@ impl Generator {
                 let t: TokenStream = t.parse().unwrap();
                 self.field_types.insert(i.clone(), t.clone());
                 quote! {
-                    #i: Vec<IndexPage<#t>>,
+                    #i: Vec<GeneralPage<IndexData<#t>>>,
                 }
             })
             .collect();
@@ -63,7 +63,10 @@ impl Generator {
             Span::mixed_site(),
         );
         let name = self.struct_def.ident.to_string().replace("Index", "");
-        let const_name = Ident::new(format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(), Span::mixed_site());
+        let const_name = Ident::new(
+            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            Span::mixed_site(),
+        );
 
         let field_names_lits: Vec<_> = self
             .struct_def
@@ -72,6 +75,12 @@ impl Generator {
             .map(|f| Literal::string(f.ident.as_ref().unwrap().to_string().as_str()))
             .map(|l| quote! { #l, })
             .collect();
+        let idents = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| f.ident.as_ref().unwrap())
+            .collect::<Vec<_>>();
         let field_names_init: Vec<_> = self
             .struct_def
             .fields
@@ -91,11 +100,13 @@ impl Generator {
                 let ty = self.field_types.get(&i).unwrap();
                 if is_unique {
                     quote! {
-                        #i: map_unique_tree_index::<#ty, #const_name>(&self.#i),
+                        let mut #i = map_index_pages_to_general(map_unique_tree_index::<#ty, #const_name>(&self.#i), previous_header);
+                        previous_header = &mut #i.last_mut().unwrap().header;
                     }
                 } else {
                     quote! {
-                        #i: map_tree_index::<#ty, #const_name>(&self.#i),
+                        let mut #i =  map_index_pages_to_general(map_tree_index::<#ty, #const_name>(&self.#i), previous_header);
+                        previous_header = &mut #i.last_mut().unwrap().header;
                     }
                 }
             })
@@ -109,9 +120,13 @@ impl Generator {
                     vec![#(#field_names_lits)*]
                 }
 
-                fn get_persisted_index(&self) -> Self::PersistedIndex {
+                fn get_persisted_index(&self, header: &mut GeneralHeader) -> Self::PersistedIndex {
+                    let mut previous_header = header;
+
+                    #(#field_names_init)*
+
                     Self::PersistedIndex {
-                        #(#field_names_init)*
+                        #(#idents,)*
                     }
                 }
             }

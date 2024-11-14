@@ -4,14 +4,16 @@ mod index;
 mod page;
 mod space_info;
 mod ty;
+mod util;
 
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::page::header::GeneralHeader;
-
+pub use header::GeneralHeader;
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::SpaceInfo;
+pub use util::map_index_pages_to_general;
+pub use ty::PageType;
 
 // TODO: Move to config
 /// The size of a page. Header size and other parts are _included_ in this size.

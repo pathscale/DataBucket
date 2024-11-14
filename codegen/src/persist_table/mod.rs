@@ -1,18 +1,28 @@
+use crate::persist_table::generator::Generator;
+use crate::persist_table::parser::Parser;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
 
-use crate::persist_table::parser::Parser;
-
-mod parser;
 mod generator;
+mod parser;
 
 pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let input_fn = Parser::parse_struct(input)?;
     let index_ident = Parser::parse_index_ident(&input_fn);
     let pk_ident = Parser::parse_pk_ident(&input_fn);
 
-    Ok(quote! {
+    let gen = Generator {
+        struct_def: input_fn,
+        pk_ident,
+        index_ident,
+    };
 
+    let space_type = gen.gen_space_type()?;
+    let space_impl = gen.gen_space_impls()?;
+
+    Ok(quote! {
+        #space_type
+        #space_impl
     })
 }
