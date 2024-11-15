@@ -1,3 +1,3 @@
 mod sized;
 
-pub use sized::SizeMeasurable;
+pub use sized::{SizeMeasurable, align};

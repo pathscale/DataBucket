@@ -83,16 +83,16 @@ impl Generator {
     }
 
     fn gen_into_space(&self) -> syn::Result<TokenStream> {
-        let ident = &self.index_ident;
+        let ident = &self.struct_def.ident;
         let name = self.struct_def.ident.to_string().replace("WorkTable", "");
         let space_ident = Ident::new(format!("{}Space", name).as_str(), Span::mixed_site());
 
         Ok(quote! {
             pub fn into_space(&self) -> #space_ident {
-                let info = #ident::space_info_default();
-                let header = info.header.clone();
+                let mut info = #ident::space_info_default();
+                let mut header = &mut info.header;
 
-                let primary_index = map_index_pages_to_general(self.get_peristed_primary_key(), &mut header);
+                let mut primary_index = map_index_pages_to_general(self.get_peristed_primary_key(), &mut header);
                 let previous_header = &mut primary_index.last_mut().unwrap().header;
                 let indexes = self.0.indexes.get_persisted_index(previous_header);
 
@@ -105,53 +105,3 @@ impl Generator {
         })
     }
 }
-
-// worktable! (
-//     name: Test,
-//     persistence: true,
-//     columns: {
-//         id: Uuid primary_key,
-//         another: i64,
-//     },
-//     indexes: {
-//         another_idx: another,
-//     }
-// );
-//
-// // Persisted index object. It's generated because Index type itself is generated.
-// struct TestIndexPersisted {
-//     primary: Vec<GeneralPage<IndexPage<Uuid>>>,
-//     another_idx: Vec<GeneralPage<IndexPage<i64>>>,
-// }
-//
-// // Describes file pages structure.
-// struct TestSpace {
-//     table_info_page: TableInfoPage,
-//     indexes: TestIndexPersisted,
-//     data: Vec<GeneralPage<DataPage>>,
-//
-//     persistence_engine: Arc<PersistenceEngine>,
-// }
-//
-// fn test_persist () {
-//     let persistence_config = PersistenceEngineConfig {
-//         path: "tests/db",
-//     };
-//     let engine = Arc::new(PersistenceEngine::new(persistence_config));
-//
-//     let table = TestWorkTable::new(engine.clone());
-//
-//     let space: TestSpace = table.into_space();
-//     // this call will save space file to `tests/db`. It will be `tests/db/test.wt`
-//     space.persist();
-// }
-//
-// fn test_read () {
-//     let persistence_config = PersistenceEngineConfig {
-//         path: "tests/db",
-//     };
-//     let engine = Arc::new(PersistenceEngine::new(persistence_config));
-//
-//     let space = TestSpace::read(engine);
-//     let table = space.into_table();
-// }

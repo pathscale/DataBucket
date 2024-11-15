@@ -21,8 +21,8 @@ impl<T> SizeMeasurable for IndexValue<T>
 where
     T: SizeMeasurable,
 {
-    fn approx_size(&self) -> usize {
-        self.key.approx_size() + self.link.approx_size()
+    fn aligned_size(&self) -> usize {
+        self.key.aligned_size() + self.link.aligned_size()
     }
 }
 
@@ -56,11 +56,11 @@ where
             key: key.clone(),
             link,
         };
-        current_size += index_value.approx_size();
+        current_size += index_value.aligned_size();
         if current_size > PAGE_SIZE {
             pages.push(current_page.clone());
             current_page.index_values.clear();
-            current_size = 8 + index_value.approx_size()
+            current_size = 8 + index_value.aligned_size()
         }
         current_page.index_values.push(index_value)
     }
@@ -86,11 +86,11 @@ where
                 key: key.clone(),
                 link: *link,
             };
-            current_size += index_value.approx_size();
+            current_size += index_value.aligned_size();
             if current_size > PAGE_SIZE {
                 pages.push(current_page.clone());
                 current_page.index_values.clear();
-                current_size = 8 + index_value.approx_size()
+                current_size = 8 + index_value.aligned_size()
             }
             current_page.index_values.push(index_value)
         }
@@ -129,7 +129,7 @@ mod test {
         assert_eq!(v.link, l);
         assert_eq!(
             rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(),
-            1u32.approx_size() + l.approx_size() + 8
+            1u32.aligned_size() + l.aligned_size() + 8
         )
     }
 
@@ -185,7 +185,7 @@ mod test {
         assert_eq!(v.link, l);
         assert_eq!(
             rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(),
-            s.approx_size() + l.approx_size() + 8
+            s.aligned_size() + l.aligned_size() + 8
         )
     }
 }

@@ -20,8 +20,11 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 
     let space_type = gen.gen_space_type()?;
     let space_impl = gen.gen_space_impls()?;
+    let size_measurable_impl = gen.gen_size_measurable_impl()?;
 
     Ok(quote! {
+        #size_measurable_impl
+
         #space_type
         #space_impl
     })
