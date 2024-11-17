@@ -3,8 +3,6 @@
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::page;
-
 /// [`Space`] represents whole [`WorkTable`] file.
 #[derive(Debug, Default)]
 pub struct Space {

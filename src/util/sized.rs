@@ -1,7 +1,6 @@
-use std::mem;
-
 use crate::link::{Link, LINK_LENGTH};
-
+use std::mem;
+use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
     if len % 4 == 0 {
@@ -35,6 +34,12 @@ size_measurable_for_sized! {u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, 
 impl SizeMeasurable for Link {
     fn aligned_size(&self) -> usize {
         LINK_LENGTH
+    }
+}
+
+impl SizeMeasurable for Uuid {
+    fn aligned_size(&self) -> usize {
+        16
     }
 }
 

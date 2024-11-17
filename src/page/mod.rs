@@ -1,7 +1,7 @@
-mod data;
+
 mod header;
 mod index;
-mod page;
+
 mod space_info;
 mod ty;
 mod util;
@@ -12,8 +12,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 pub use header::GeneralHeader;
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::SpaceInfo;
-pub use util::map_index_pages_to_general;
 pub use ty::PageType;
+pub use util::map_index_pages_to_general;
 
 // TODO: Move to config
 /// The size of a page. Header size and other parts are _included_ in this size.

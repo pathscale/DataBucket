@@ -1,3 +1,5 @@
+mod persistable;
 mod sized;
 
-pub use sized::{SizeMeasurable, align};
+pub use persistable::Persistable;
+pub use sized::{align, SizeMeasurable};

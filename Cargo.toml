@@ -14,3 +14,5 @@ rkyv = { version = "0.7", features = ["uuid"] }
 scc = "2.1.16"
 lockfree = "0.5.1"
 serde = { version = "1.0.215", features = ["derive"] }
+uuid = { version = "1.11.0", features = ["v4"] }
+bitcode = "0.6.3"

@@ -2,12 +2,14 @@
 
 use std::sync::Arc;
 
+use rkyv::ser::serializers::AllocSerializer;
 use rkyv::{Archive, Deserialize, Serialize};
 use scc::ebr::Guard;
 use scc::TreeIndex;
 
 use crate::link::Link;
-use crate::util::SizeMeasurable;
+use crate::page::INNER_PAGE_LENGTH;
+use crate::util::{Persistable, SizeMeasurable};
 
 /// Represents `key/value` pair of B-Tree index, where value is always
 /// [`data::Link`], as it is represented in primary and secondary indexes.
@@ -100,15 +102,22 @@ where
     pages
 }
 
+impl<T> Persistable for IndexPage<T>
+where
+    T: Archive + Serialize<AllocSerializer<{ INNER_PAGE_LENGTH }>>,
+{
+    fn as_bytes(&self) -> impl AsRef<[u8]> {
+        rkyv::to_bytes::<_, { INNER_PAGE_LENGTH }>(self).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
     use scc::TreeIndex;
 
-    use crate::page::index::{map_tree_index, map_unique_tree_index};
-    use crate::page::PAGE_SIZE;
-    use crate::util::SizeMeasurable;
+    use crate::page::index::map_unique_tree_index;
+    use crate::page::{INNER_PAGE_LENGTH, PAGE_SIZE};
+    use crate::util::{Persistable, SizeMeasurable};
     use crate::Link;
 
     #[test]
@@ -187,5 +196,23 @@ mod test {
             rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(),
             s.aligned_size() + l.aligned_size() + 8
         )
+    }
+
+    #[test]
+    fn test_as_bytes() {
+        let index = TreeIndex::new();
+        for i in 0..1022 {
+            let l = Link {
+                page_id: 1.into(),
+                offset: 0,
+                length: 32,
+            };
+            index.insert(i, l).expect("is ok");
+        }
+        let pages = map_unique_tree_index::<_, { INNER_PAGE_LENGTH }>(&index);
+        let page = pages.get(0).unwrap();
+
+        let bytes = page.as_bytes();
+        assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)
     }
 }

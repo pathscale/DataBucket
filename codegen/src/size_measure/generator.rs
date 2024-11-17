@@ -11,19 +11,23 @@ impl Generator {
         let struct_ident = &self.struct_def.ident;
 
         let mut num = -1;
-        let sum = self.struct_def.fields.iter().map(|f| {
-            if let Some(i) = &f.ident {
-                quote! {
-                    self.#i.aligned_size()
+        let sum = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| {
+                if let Some(i) = &f.ident {
+                    quote! {
+                        self.#i.aligned_size()
+                    }
+                } else {
+                    num += 1;
+                    quote! {
+                        self.#num.aligned_size()
+                    }
                 }
-            } else {
-                num += 1;
-                quote! {
-                    self.#num.aligned_size()
-                }
-            }
-        }).collect::<Vec<_>>();
-
+            })
+            .collect::<Vec<_>>();
 
         Ok(quote! {
             impl SizeMeasurable for #struct_ident {

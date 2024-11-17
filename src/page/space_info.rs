@@ -3,8 +3,9 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
-use crate::page::GeneralHeader;
+use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
 use crate::{page, space};
+use crate::util::Persistable;
 
 pub type SpaceName = String;
 
@@ -44,5 +45,29 @@ impl From<SpaceInfo> for page::General<SpaceInfo> {
             header,
             inner: info,
         }
+    }
+}
+
+impl Persistable for SpaceInfo {
+    fn as_bytes(&self) -> impl AsRef<[u8]> {
+        rkyv::to_bytes::<_, { INNER_PAGE_LENGTH }>(self).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::page::{SpaceInfo, INNER_PAGE_LENGTH};
+    use crate::util::Persistable;
+
+    #[test]
+    fn test_as_bytes() {
+        let info = SpaceInfo {
+            id: 0.into(),
+            page_count: 0,
+            name: "Test".to_string(),
+            primary_key_intervals: vec![],
+        };
+        let bytes = info.as_bytes();
+        assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)
     }
 }

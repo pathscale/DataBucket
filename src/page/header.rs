@@ -5,18 +5,20 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::page;
 use crate::page::ty::PageType;
 use crate::space;
-pub const PAGE_HEADER_SIZE: usize = 32;
+use crate::util::Persistable;
+
+pub const GENERAL_HEADER_SIZE: usize = 20;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
 pub struct GeneralHeader {
+    pub space_id: space::Id,
     pub page_id: page::PageId,
     pub previous_id: page::PageId,
     pub next_id: page::PageId,
     pub page_type: PageType,
-    pub space_id: space::Id,
 }
 
 impl GeneralHeader {
@@ -56,5 +58,44 @@ impl GeneralHeader {
             page_type,
             space_id: self.space_id,
         }
+    }
+}
+
+impl Persistable for GeneralHeader {
+    fn as_bytes(&self) -> impl AsRef<[u8]> {
+        rkyv::to_bytes::<_, GENERAL_HEADER_SIZE>(self).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::page::header::GENERAL_HEADER_SIZE;
+    use crate::util::Persistable;
+    use crate::{GeneralHeader, PageType};
+
+    #[test]
+    fn test_as_bytes() {
+        let header = GeneralHeader {
+            page_id: 1.into(),
+            previous_id: 2.into(),
+            next_id: 3.into(),
+            page_type: PageType::Empty,
+            space_id: 4.into(),
+        };
+        let bytes = header.as_bytes();
+        assert_eq!(bytes.as_ref().len(), GENERAL_HEADER_SIZE)
+    }
+
+    #[test]
+    fn test_as_bytes_max() {
+        let header = GeneralHeader {
+            page_id: u32::MAX.into(),
+            previous_id: (u32::MAX - 1).into(),
+            next_id: (u32::MAX - 2).into(),
+            page_type: PageType::Empty,
+            space_id: (u32::MAX - 3).into(),
+        };
+        let bytes = header.as_bytes();
+        assert_eq!(bytes.as_ref().len(), GENERAL_HEADER_SIZE)
     }
 }
