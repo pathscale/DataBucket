@@ -1,4 +1,5 @@
 //! [`SpaceInfo`] declaration.
+use std::collections::HashMap;
 
 use rkyv::{Archive, Deserialize, Serialize};
 
@@ -20,17 +21,18 @@ pub type SpaceName = String;
 
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
-#[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize)]
 pub struct SpaceInfo {
     pub id: space::Id,
     pub page_count: u32,
     pub name: SpaceName,
     pub primary_key_intervals: Vec<Interval>,
+    pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
 }
 
 /// Represents some interval between values.
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct Interval(usize, usize);
+pub struct Interval(pub usize, pub usize);
 
 impl From<SpaceInfo> for page::General<SpaceInfo> {
     fn from(info: SpaceInfo) -> Self {
@@ -56,6 +58,8 @@ impl Persistable for SpaceInfo {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use crate::page::{SpaceInfo, INNER_PAGE_LENGTH};
     use crate::util::Persistable;
 
@@ -66,6 +70,7 @@ mod test {
             page_count: 0,
             name: "Test".to_string(),
             primary_key_intervals: vec![],
+            secondary_index_intervals: HashMap::new()
         };
         let bytes = info.as_bytes();
         assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)

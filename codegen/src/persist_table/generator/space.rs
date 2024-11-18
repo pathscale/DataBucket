@@ -17,6 +17,8 @@ impl Generator {
         Ok(quote! {
             #[derive(Debug, Clone)]
             pub struct #name_ident {
+                pub path: String,
+
                 pub info: GeneralPage<SpaceInfoData>,
                 pub primary_index: Vec<GeneralPage<IndexData<#pk_type>>>,
                 pub indexes: #index_persisted_ident,
@@ -31,12 +33,16 @@ impl Generator {
         let persisted_pk_fn = self.gen_persisted_primary_key_fn()?;
         let into_space = self.gen_into_space()?;
 
+        let space_persist = self.gen_persist_fn()?;
+
         Ok(quote! {
             impl #ident {
                 #space_info_fn
                 #persisted_pk_fn
                 #into_space
             }
+
+            #space_persist
         })
     }
 
@@ -50,7 +56,8 @@ impl Generator {
                     id: 0.into(),
                     page_count: 0,
                     name: #literal_name.to_string(),
-                    primary_key_intervals: vec![]
+                    primary_key_intervals: vec![],
+                    secondary_index_intervals: std::collections::HashMap::new(),
                 };
                 let header = GeneralHeader {
                     page_id: 0.into(),
@@ -89,17 +96,51 @@ impl Generator {
 
         Ok(quote! {
             pub fn into_space(&self) -> #space_ident {
+                let path = self.1.config_path.clone();
+
                 let mut info = #ident::space_info_default();
+                info.inner.page_count = 1;
                 let mut header = &mut info.header;
 
                 let mut primary_index = map_index_pages_to_general(self.get_peristed_primary_key(), &mut header);
+                let interval = Interval(primary_index.first().unwrap().header.page_id.into(), primary_index.last().unwrap().header.page_id.into());
+                info.inner.primary_key_intervals = vec![interval];
                 let previous_header = &mut primary_index.last_mut().unwrap().header;
                 let indexes = self.0.indexes.get_persisted_index(previous_header);
 
                 #space_ident {
+                    path,
                     info,
                     primary_index,
                     indexes,
+                }
+            }
+        })
+    }
+
+    fn gen_persist_fn(&self) -> syn::Result<TokenStream> {
+        let name = self.struct_def.ident.to_string().replace("WorkTable", "");
+        let space_ident = Ident::new(format!("{}Space", name).as_str(), Span::mixed_site());
+        let file_name = Literal::string(format!("{}.wt", name.to_lowercase()).as_str());
+
+        Ok(quote! {
+            impl #space_ident {
+                pub fn persist(&self) -> eyre::Result<()> {
+                    use std::io::prelude::*;
+
+                    let file_name = #file_name;
+                    let path = std::path::Path::new(format!("{}/{}", &self.path , file_name).as_str());
+                    let prefix = &self.path;
+                    std::fs::create_dir_all(prefix).unwrap();
+
+                    let mut file = std::fs::File::create(format!("{}/{}", &self.path , file_name))?;
+                    file.write_all(self.info.header.as_bytes().as_ref())?;
+                    file.write_all(self.info.inner.as_bytes().as_ref())?;
+
+                    let curr_position = file.stream_position()?;
+                    file.seek(std::io::SeekFrom::Current(PAGE_SIZE as i64 - curr_position as i64))?;
+
+                    Ok(())
                 }
             }
         })
