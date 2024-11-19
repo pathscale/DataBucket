@@ -1,7 +1,7 @@
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::IndexData;
+use crate::{DataPage, GeneralPage, IndexData, Persistable, PAGE_SIZE};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -23,12 +23,50 @@ pub fn map_index_pages_to_general<T>(
     general_pages
 }
 
+pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
+    pages: Vec<DataPage<DATA_LENGTH>>,
+    header: &mut GeneralHeader,
+) -> Vec<General<DataPage<DATA_LENGTH>>> {
+    let mut previous_header = header;
+    let mut general_pages = vec![];
+
+    for p in pages {
+        let general = General {
+            header: previous_header.follow_with(PageType::Data),
+            inner: p,
+        };
+
+        general_pages.push(general);
+        previous_header = &mut general_pages.last_mut().unwrap().header;
+    }
+
+    general_pages
+}
+
+pub fn persist_page<T>(page: &GeneralPage<T>, file: &mut std::fs::File) -> eyre::Result<()>
+where
+    T: Persistable,
+{
+    use std::io::prelude::*;
+
+    let page_count = page.header.page_id.0 as i64 + 1;
+
+    file.write_all(page.header.as_bytes().as_ref())?;
+    file.write_all(page.inner.as_bytes().as_ref())?;
+    let curr_position = file.stream_position()?;
+    file.seek(std::io::SeekFrom::Current(
+        (page_count * PAGE_SIZE as i64) - curr_position as i64,
+    ))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use scc::TreeIndex;
 
-    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType};
     use crate::page::INNER_PAGE_LENGTH;
+    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType};
 
     #[test]
     fn test_map() {

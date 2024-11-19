@@ -5,8 +5,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
 use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
-use crate::{page, space};
 use crate::util::Persistable;
+use crate::{page, space};
 
 pub type SpaceName = String;
 
@@ -70,7 +70,7 @@ mod test {
             page_count: 0,
             name: "Test".to_string(),
             primary_key_intervals: vec![],
-            secondary_index_intervals: HashMap::new()
+            secondary_index_intervals: HashMap::new(),
         };
         let bytes = info.as_bytes();
         assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)

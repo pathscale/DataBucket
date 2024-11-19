@@ -14,12 +14,14 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let mut gen = Generator::new(input_fn);
 
     let type_def = gen.gen_persist_type()?;
+    let persistable_def = gen.gen_persistable_impl()?;
     let impl_def = gen.gen_persist_impl()?;
 
     Ok(quote! {
         #type_def
-
         #impl_def
+
+        #persistable_def
     })
 }
 

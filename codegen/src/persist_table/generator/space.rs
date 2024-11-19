@@ -13,16 +13,20 @@ impl Generator {
             format!("{}IndexPersisted", name).as_str(),
             Span::mixed_site(),
         );
+        let const_name = Ident::new(
+            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            Span::mixed_site(),
+        );
 
         Ok(quote! {
-            #[derive(Debug, Clone)]
-            pub struct #name_ident {
+            #[derive(Debug)]
+            pub struct #name_ident<const DATA_LENGTH: usize = #const_name > {
                 pub path: String,
 
                 pub info: GeneralPage<SpaceInfoData>,
                 pub primary_index: Vec<GeneralPage<IndexData<#pk_type>>>,
                 pub indexes: #index_persisted_ident,
-                //pub data: Vec<GeneralPage<Data>>,
+                pub data: Vec<GeneralPage<DataPage<DATA_LENGTH>>>,
             }
         })
     }
@@ -92,10 +96,14 @@ impl Generator {
     fn gen_into_space(&self) -> syn::Result<TokenStream> {
         let ident = &self.struct_def.ident;
         let name = self.struct_def.ident.to_string().replace("WorkTable", "");
+        let const_name = Ident::new(
+            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            Span::mixed_site(),
+        );
         let space_ident = Ident::new(format!("{}Space", name).as_str(), Span::mixed_site());
 
         Ok(quote! {
-            pub fn into_space(&self) -> #space_ident {
+            pub fn into_space(&self) -> #space_ident<#const_name> {
                 let path = self.1.config_path.clone();
 
                 let mut info = #ident::space_info_default();
@@ -103,16 +111,28 @@ impl Generator {
                 let mut header = &mut info.header;
 
                 let mut primary_index = map_index_pages_to_general(self.get_peristed_primary_key(), &mut header);
-                let interval = Interval(primary_index.first().unwrap().header.page_id.into(), primary_index.last().unwrap().header.page_id.into());
+                let interval = Interval(
+                    primary_index.first().unwrap().header.page_id.into(),
+                    primary_index.last().unwrap().header.page_id.into()
+                );
+
                 info.inner.primary_key_intervals = vec![interval];
                 let previous_header = &mut primary_index.last_mut().unwrap().header;
-                let indexes = self.0.indexes.get_persisted_index(previous_header);
+                let mut indexes = self.0.indexes.get_persisted_index(previous_header);
+                let secondary_intevals = indexes.get_intervals();
+                info.inner.secondary_index_intervals = secondary_intevals;
+
+                let previous_header = indexes.get_last_header_mut();
+                let data = map_data_pages_to_general(self.0.data.get_bytes().into_iter().map(|b| DataPage {
+                    data: b
+                }).collect::<Vec<_>>(), previous_header);
 
                 #space_ident {
                     path,
                     info,
                     primary_index,
                     indexes,
+                    data
                 }
             }
         })
@@ -124,21 +144,23 @@ impl Generator {
         let file_name = Literal::string(format!("{}.wt", name.to_lowercase()).as_str());
 
         Ok(quote! {
-            impl #space_ident {
+            impl<const DATA_LENGTH: usize> #space_ident<DATA_LENGTH> {
                 pub fn persist(&self) -> eyre::Result<()> {
-                    use std::io::prelude::*;
-
                     let file_name = #file_name;
                     let path = std::path::Path::new(format!("{}/{}", &self.path , file_name).as_str());
                     let prefix = &self.path;
                     std::fs::create_dir_all(prefix).unwrap();
 
                     let mut file = std::fs::File::create(format!("{}/{}", &self.path , file_name))?;
-                    file.write_all(self.info.header.as_bytes().as_ref())?;
-                    file.write_all(self.info.inner.as_bytes().as_ref())?;
+                    persist_page(&self.info, &mut file)?;
 
-                    let curr_position = file.stream_position()?;
-                    file.seek(std::io::SeekFrom::Current(PAGE_SIZE as i64 - curr_position as i64))?;
+                    for primary_index_page in &self.primary_index {
+                        persist_page(&primary_index_page, &mut file)?;
+                    }
+                    self.indexes.persist(&mut file)?;
+                    for data_page in &self.primary_index {
+                        persist_page(&data_page, &mut file)?;
+                    }
 
                     Ok(())
                 }

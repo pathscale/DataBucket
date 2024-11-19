@@ -56,7 +56,86 @@ impl Generator {
         })
     }
 
-    pub fn gen_persist_impl(&self) -> syn::Result<TokenStream> {
+    pub fn gen_persist_impl(&mut self) -> syn::Result<TokenStream> {
+        let name_ident = Ident::new(
+            format!("{}Persisted", self.struct_def.ident).as_str(),
+            Span::mixed_site(),
+        );
+        let field_names_list: Vec<_> = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| (Literal::string(f.ident.as_ref().unwrap().to_string().as_str()), f.ident.as_ref().unwrap()))
+            .map(|(l, i)| {
+                quote! {
+                    let i = Interval (
+                        self.#i.first().unwrap().header.page_id.into(),
+                        self.#i.last().unwrap().header.page_id.into()
+                    );
+                    map.insert(#l.to_string(), vec![i]);
+                }
+            })
+            .collect();
+        let last_header: Vec<_> = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| f.ident.as_ref().unwrap())
+            .map(|i| {
+                quote! {
+                    if header.is_none() {
+                        header = Some(&mut self.#i.last_mut().unwrap().header);
+                    } else {
+                        let new_header = &mut self.#i.last_mut().unwrap().header;
+                        if header.as_ref().unwrap().page_id < new_header.page_id {
+                            header = Some(new_header)
+                        }
+                    }
+                }
+            })
+            .collect();
+        let persist_logic = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| f.ident.as_ref().unwrap())
+            .map(|i| {
+                quote! {
+                    for page in &self.#i {
+                        persist_page(&page, file)?;
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(quote! {
+            impl #name_ident {
+                pub fn get_intervals(&self) -> std::collections::HashMap<String, Vec<Interval>> {
+                    let mut map = std::collections::HashMap::new();
+
+                    #(#field_names_list)*
+
+                    map
+                }
+
+                pub fn get_last_header_mut(&mut self) -> &mut GeneralHeader {
+                    let mut header = None;
+
+                    #(#last_header)*
+
+                    header.unwrap()
+                }
+
+                pub fn persist(&self, file: &mut std::fs::File) -> eyre::Result<()> {
+                    #(#persist_logic)*
+
+                    Ok(())
+                }
+            }
+        })
+    }
+
+    pub fn gen_persistable_impl(&self) -> syn::Result<TokenStream> {
         let ident = &self.struct_def.ident;
         let name_ident = Ident::new(
             format!("{}Persisted", self.struct_def.ident).as_str(),

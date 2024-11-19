@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 data_bucket_derive = {path = "codegen"}
 
+eyre = "0.6.12"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
 rkyv = { version = "0.7", features = ["uuid"] }
 scc = "2.1.16"
