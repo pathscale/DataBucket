@@ -62,6 +62,7 @@ impl Generator {
                     name: #literal_name.to_string(),
                     primary_key_intervals: vec![],
                     secondary_index_intervals: std::collections::HashMap::new(),
+                    data_intervals: vec![],
                 };
                 let header = GeneralHeader {
                     page_id: 0.into(),
@@ -126,13 +127,18 @@ impl Generator {
                 let data = map_data_pages_to_general(self.0.data.get_bytes().into_iter().map(|b| DataPage {
                     data: b
                 }).collect::<Vec<_>>(), previous_header);
+                let interval = Interval(
+                    data.first().unwrap().header.page_id.into(),
+                    data.last().unwrap().header.page_id.into()
+                );
+                info.inner.data_intervals = vec![interval];
 
                 #space_ident {
                     path,
                     info,
                     primary_index,
                     indexes,
-                    data
+                    data,
                 }
             }
         })

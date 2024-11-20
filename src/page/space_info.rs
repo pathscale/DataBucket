@@ -28,6 +28,7 @@ pub struct SpaceInfo {
     pub name: SpaceName,
     pub primary_key_intervals: Vec<Interval>,
     pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
+    pub data_intervals: Vec<Interval>,
 }
 
 /// Represents some interval between values.
@@ -71,6 +72,7 @@ mod test {
             name: "Test".to_string(),
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::new(),
+            data_intervals: vec![]
         };
         let bytes = info.as_bytes();
         assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)
