@@ -1,3 +1,7 @@
+use std::io::Read;
+
+use rkyv::Archive;
+
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
@@ -59,6 +63,18 @@ where
     ))?;
 
     Ok(())
+}
+
+pub fn load_pages<T>(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<T>>>
+where
+    T: Archive
+{
+    let mut buf: [u8; PAGE_SIZE];
+    file.read_exact(&mut buf)?;
+    // let page: GeneralPage<T> = rkyv::::<GeneralPage<T>, _>(&buf)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralPage<T>>(&buf) };
+
+    Ok(vec![archived.into()])
 }
 
 #[cfg(test)]
