@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn general_header_length_valid() {
         let header = get_general_header();
-        let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&header).unwrap();
 
         assert_eq!(bytes.len(), HEADER_LENGTH)
     }

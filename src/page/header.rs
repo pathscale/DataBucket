@@ -69,7 +69,7 @@ impl GeneralHeader {
 
 impl Persistable for GeneralHeader {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<_, GENERAL_HEADER_SIZE>(self).unwrap()
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
 

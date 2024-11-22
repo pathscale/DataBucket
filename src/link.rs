@@ -25,7 +25,7 @@ mod tests {
             offset: 10,
             length: 20,
         };
-        let bytes = rkyv::to_bytes::<_, 16>(&link).unwrap();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&link).unwrap();
 
         assert_eq!(bytes.len(), LINK_LENGTH)
     }

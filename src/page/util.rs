@@ -66,7 +66,7 @@ mod test {
     use scc::TreeIndex;
 
     use crate::page::INNER_PAGE_LENGTH;
-    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE};
+    use crate::{map_index_pages_to_general, page::map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE};
 
     #[test]
     fn test_map() {

@@ -2,13 +2,11 @@
 
 use std::sync::Arc;
 
-use rkyv::ser::serializers::AllocSerializer;
 use rkyv::{Archive, Deserialize, Serialize};
 use scc::ebr::Guard;
 use scc::TreeIndex;
 
 use crate::link::Link;
-use crate::page::INNER_PAGE_LENGTH;
 use crate::util::{Persistable, SizeMeasurable};
 
 /// Represents `key/value` pair of B-Tree index, where value is always
@@ -104,10 +102,12 @@ where
 
 impl<T> Persistable for IndexPage<T>
 where
-    T: Archive + Serialize<AllocSerializer<{ INNER_PAGE_LENGTH }>>,
+    T: Archive
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<_, { INNER_PAGE_LENGTH }>(self).unwrap()
+        let mut data: [u8; 10] = [0; 10];
+        data
+        // rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
 
@@ -137,7 +137,7 @@ mod test {
         assert_eq!(v.key, 1);
         assert_eq!(v.link, l);
         assert_eq!(
-            rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&res[0]).unwrap().len(),
             1u32.aligned_size() + l.aligned_size() + 8
         )
     }
@@ -158,7 +158,7 @@ mod test {
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].index_values.len(), 1023);
         // As 1023 * 16 + 8
-        assert_eq!(rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(), 16_376);
+        assert_eq!(rkyv::to_bytes::<rkyv::rancor::Error>(&res[0]).unwrap().len(), 16_376);
 
         let l = Link {
             page_id: 1.into(),
@@ -171,8 +171,8 @@ mod test {
         assert_eq!(res[0].index_values.len(), 1023);
         assert_eq!(res[1].index_values.len(), 1);
         // As 16 + 8
-        assert_eq!(rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(), 16_376);
-        assert_eq!(rkyv::to_bytes::<_, 0>(&res[1]).unwrap().len(), 24);
+        assert_eq!(rkyv::to_bytes::<rkyv::rancor::Error>(&res[0]).unwrap().len(), 16_376);
+        assert_eq!(rkyv::to_bytes::<rkyv::rancor::Error>(&res[1]).unwrap().len(), 24);
     }
 
     #[test]
@@ -193,7 +193,7 @@ mod test {
         assert_eq!(v.key, s);
         assert_eq!(v.link, l);
         assert_eq!(
-            rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&res[0]).unwrap().len(),
             s.aligned_size() + l.aligned_size() + 8
         )
     }

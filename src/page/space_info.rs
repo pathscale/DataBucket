@@ -56,7 +56,7 @@ impl From<SpaceInfo> for page::General<SpaceInfo> {
 
 impl Persistable for SpaceInfo {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<_, { INNER_PAGE_LENGTH }>(self).unwrap()
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
 
