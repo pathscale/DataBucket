@@ -1,7 +1,13 @@
 //! [`IndexPage`] definition.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 
+use rkyv::rancor::Strategy;
+use rkyv::ser::allocator::ArenaHandle;
+use rkyv::ser::sharing::Share;
+use rkyv::ser::Serializer;
+use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 use scc::ebr::Guard;
 use scc::TreeIndex;
@@ -33,7 +39,7 @@ pub struct IndexPage<T> {
 }
 
 // Manual `Default` implementation to avoid `T: Default`
-impl<T> Default for IndexPage<T> {
+impl<'a, T> Default for IndexPage<T> {
     fn default() -> Self {
         Self {
             index_values: vec![],
@@ -102,12 +108,9 @@ where
 
 impl<T> Persistable for IndexPage<T>
 where
-    T: Archive
-{
+    T: Archive + for<'a> Serialize<Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>>{
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        let mut data: [u8; 10] = [0; 10];
-        data
-        // rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
 
