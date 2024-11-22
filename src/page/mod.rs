@@ -83,8 +83,7 @@ pub struct General<Inner> {
 mod tests {
     use crate::page::ty::PageType;
     use crate::page::{GeneralHeader, HEADER_LENGTH};
-
-    use super::PAGE_SIZE;
+    use crate::PAGE_SIZE;
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {

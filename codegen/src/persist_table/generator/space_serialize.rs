@@ -70,6 +70,7 @@ impl Generator {
                     next_id: 0.into(),
                     page_type: PageType::SpaceInfo,
                     space_id: 0.into(),
+                    data_length: 0,
                 };
                 GeneralPage {
                     header,
@@ -116,6 +117,7 @@ impl Generator {
                     primary_index.first().unwrap().header.page_id.into(),
                     primary_index.last().unwrap().header.page_id.into()
                 );
+                info.inner.page_count += primary_index.len() as u32;
 
                 info.inner.primary_key_intervals = vec![interval];
                 let previous_header = &mut primary_index.last_mut().unwrap().header;

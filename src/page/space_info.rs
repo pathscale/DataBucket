@@ -6,9 +6,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::page::ty::PageType;
 use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
 use crate::util::Persistable;
-use crate::{page, space};
-
-use super::PAGE_SIZE;
+use crate::{page, space, PAGE_SIZE};
 
 pub type SpaceName = String;
 
