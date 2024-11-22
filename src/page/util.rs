@@ -66,7 +66,7 @@ mod test {
     use scc::TreeIndex;
 
     use crate::page::INNER_PAGE_LENGTH;
-    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType};
+    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE};
 
     #[test]
     fn test_map() {
@@ -87,6 +87,7 @@ mod test {
             previous_id: 0.into(),
             next_id: 0.into(),
             page_type: PageType::SpaceInfo,
+            data_length: PAGE_SIZE as u32,
         };
         let generalised = map_index_pages_to_general(res, &mut header);
         assert_eq!(generalised.len(), 3);

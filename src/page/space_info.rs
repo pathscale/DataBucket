@@ -8,6 +8,8 @@ use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
 use crate::util::Persistable;
 use crate::{page, space};
 
+use super::PAGE_SIZE;
+
 pub type SpaceName = String;
 
 // TODO: This must be modified to describe table structure. I think page intervals
@@ -43,6 +45,7 @@ impl From<SpaceInfo> for page::General<SpaceInfo> {
             next_id: page::PageId::from(0),
             page_type: PageType::SpaceInfo,
             space_id: info.id,
+            data_length: PAGE_SIZE as u32,
         };
         page::General {
             header,

@@ -7,7 +7,9 @@ use crate::page::ty::PageType;
 use crate::space;
 use crate::util::Persistable;
 
-pub const GENERAL_HEADER_SIZE: usize = 20;
+use super::PAGE_SIZE;
+
+pub const GENERAL_HEADER_SIZE: usize = 24;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
@@ -19,6 +21,7 @@ pub struct GeneralHeader {
     pub previous_id: page::PageId,
     pub next_id: page::PageId,
     pub page_type: PageType,
+    pub data_length: u32,
 }
 
 impl GeneralHeader {
@@ -29,6 +32,7 @@ impl GeneralHeader {
             next_id: 0.into(),
             page_type: type_,
             space_id,
+            data_length: PAGE_SIZE as u32,
         }
     }
 
@@ -43,6 +47,7 @@ impl GeneralHeader {
             next_id: 0.into(),
             page_type: self.page_type,
             space_id: self.space_id,
+            data_length: PAGE_SIZE as u32,
         }
     }
 
@@ -57,6 +62,7 @@ impl GeneralHeader {
             next_id: 0.into(),
             page_type,
             space_id: self.space_id,
+            data_length: PAGE_SIZE as u32,
         }
     }
 }
@@ -72,6 +78,7 @@ mod test {
     use crate::page::header::GENERAL_HEADER_SIZE;
     use crate::util::Persistable;
     use crate::{GeneralHeader, PageType};
+    use super::super::PAGE_SIZE;
 
     #[test]
     fn test_as_bytes() {
@@ -81,6 +88,7 @@ mod test {
             next_id: 3.into(),
             page_type: PageType::Empty,
             space_id: 4.into(),
+            data_length: PAGE_SIZE as u32,
         };
         let bytes = header.as_bytes();
         assert_eq!(bytes.as_ref().len(), GENERAL_HEADER_SIZE)
@@ -94,6 +102,7 @@ mod test {
             next_id: (u32::MAX - 2).into(),
             page_type: PageType::Empty,
             space_id: (u32::MAX - 3).into(),
+            data_length: PAGE_SIZE as u32,
         };
         let bytes = header.as_bytes();
         assert_eq!(bytes.as_ref().len(), GENERAL_HEADER_SIZE)
