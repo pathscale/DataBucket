@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
-use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
+use crate::page::GeneralHeader;
 use crate::util::Persistable;
 use crate::{page, space};
 

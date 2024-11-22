@@ -1,6 +1,5 @@
 //! [`IndexPage`] definition.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use rkyv::rancor::Strategy;
