@@ -1,11 +1,15 @@
 use std::io::Read;
 
+use rkyv::api::low::deserialize;
 use rkyv::Archive;
 
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
 use crate::{DataPage, GeneralPage, IndexData, Persistable, PAGE_SIZE};
+
+use super::header::ArchivedGeneralHeader;
+use super::{header, ArchivedGeneral, HEADER_LENGTH, INNER_PAGE_LENGTH};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -69,12 +73,19 @@ pub fn load_pages<T>(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<T
 where
     T: Archive
 {
-    let mut buf: [u8; PAGE_SIZE];
+    let mut buf: [u8; HEADER_LENGTH];
     file.read_exact(&mut buf)?;
-    // let page: GeneralPage<T> = rkyv::::<GeneralPage<T>, _>(&buf)?;
-    let archived = unsafe { rkyv::archived_root::<GeneralPage<T>>(&buf) };
 
-    Ok(vec![archived.into()])
+    let header = rkyv::access::<ArchivedGeneralHeader, rkyv::rancor::Error>(&buf)?;
+    
+    let mut page_data: [u8; INNER_PAGE_LENGTH];
+    file.read_exact(&mut page_data);
+
+    let general_page: GeneralPage<T> = GeneralPage{
+        header: deserialize(header)?,
+        inner: deserialize(page_data)?,
+    };
+    Ok(vec![general_page])
 }
 
 #[cfg(test)]
