@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
-use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
+use crate::page::GeneralHeader;
 use crate::util::Persistable;
 use crate::{page, space, PAGE_SIZE};
 
@@ -54,7 +54,7 @@ impl From<SpaceInfo> for page::General<SpaceInfo> {
 
 impl Persistable for SpaceInfo {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<_, { INNER_PAGE_LENGTH }>(self).unwrap()
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
 
