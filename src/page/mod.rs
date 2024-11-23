@@ -31,9 +31,10 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 /// * `next_id` - 4 bytes,
 /// * `page_type` - 2 bytes,
 /// * `space_id` - 4 bytes,
+/// * `data_length` - 4 bytes,
 ///
 /// **2 bytes are added by rkyv implicitly.**
-pub const HEADER_LENGTH: usize = 20;
+pub const HEADER_LENGTH: usize = 24;
 
 /// Length of the inner part of [`General`] page. It's counted as [`PAGE_SIZE`]
 /// without [`General`] page [`HEADER_LENGTH`].
@@ -82,6 +83,7 @@ pub struct General<Inner> {
 mod tests {
     use crate::page::ty::PageType;
     use crate::page::{GeneralHeader, HEADER_LENGTH};
+    use crate::PAGE_SIZE;
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {
@@ -90,6 +92,7 @@ mod tests {
             next_id: 4.into(),
             page_type: PageType::Index,
             space_id: 5.into(),
+            data_length: PAGE_SIZE as u32,
         }
     }
 

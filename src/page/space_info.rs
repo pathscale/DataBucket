@@ -6,7 +6,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::page::ty::PageType;
 use crate::page::{GeneralHeader, INNER_PAGE_LENGTH};
 use crate::util::Persistable;
-use crate::{page, space};
+use crate::{page, space, PAGE_SIZE};
 
 pub type SpaceName = String;
 
@@ -43,6 +43,7 @@ impl From<SpaceInfo> for page::General<SpaceInfo> {
             next_id: page::PageId::from(0),
             page_type: PageType::SpaceInfo,
             space_id: info.id,
+            data_length: PAGE_SIZE as u32,
         };
         page::General {
             header,

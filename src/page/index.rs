@@ -213,6 +213,6 @@ mod test {
         let page = pages.get(0).unwrap();
 
         let bytes = page.as_bytes();
-        assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)
+        assert!(bytes.as_ref().len() <= INNER_PAGE_LENGTH)
     }
 }

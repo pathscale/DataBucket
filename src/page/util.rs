@@ -43,16 +43,19 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     general_pages
 }
 
-pub fn persist_page<T>(page: &GeneralPage<T>, file: &mut std::fs::File) -> eyre::Result<()>
+pub fn persist_page<T>(page: &mut GeneralPage<T>, file: &mut std::fs::File) -> eyre::Result<()>
 where
     T: Persistable,
 {
     use std::io::prelude::*;
 
     let page_count = page.header.page_id.0 as i64 + 1;
+    let inner_bytes = page.inner.as_bytes();
+    page.header.data_length = inner_bytes.as_ref().len() as u32;
+    println!("{:?}",  inner_bytes.as_ref().len());
 
     file.write_all(page.header.as_bytes().as_ref())?;
-    file.write_all(page.inner.as_bytes().as_ref())?;
+    file.write_all(inner_bytes.as_ref())?;
     let curr_position = file.stream_position()?;
     file.seek(std::io::SeekFrom::Current(
         (page_count * PAGE_SIZE as i64) - curr_position as i64,
@@ -66,7 +69,7 @@ mod test {
     use scc::TreeIndex;
 
     use crate::page::INNER_PAGE_LENGTH;
-    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType};
+    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE};
 
     #[test]
     fn test_map() {
@@ -87,6 +90,7 @@ mod test {
             previous_id: 0.into(),
             next_id: 0.into(),
             page_type: PageType::SpaceInfo,
+            data_length: PAGE_SIZE as u32,
         };
         let generalised = map_index_pages_to_general(res, &mut header);
         assert_eq!(generalised.len(), 3);
