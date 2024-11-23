@@ -153,21 +153,21 @@ impl Generator {
 
         Ok(quote! {
             impl<const DATA_LENGTH: usize> #space_ident<DATA_LENGTH> {
-                pub fn persist(&self) -> eyre::Result<()> {
+                pub fn persist(&mut self) -> eyre::Result<()> {
                     let file_name = #file_name;
                     let path = std::path::Path::new(format!("{}/{}", &self.path , file_name).as_str());
                     let prefix = &self.path;
                     std::fs::create_dir_all(prefix).unwrap();
 
                     let mut file = std::fs::File::create(format!("{}/{}", &self.path , file_name))?;
-                    persist_page(&self.info, &mut file)?;
+                    persist_page(&mut self.info, &mut file)?;
 
-                    for primary_index_page in &self.primary_index {
-                        persist_page(&primary_index_page, &mut file)?;
+                    for mut primary_index_page in &mut self.primary_index {
+                        persist_page(&mut primary_index_page, &mut file)?;
                     }
                     self.indexes.persist(&mut file)?;
-                    for data_page in &self.primary_index {
-                        persist_page(&data_page, &mut file)?;
+                    for mut data_page in &mut self.primary_index {
+                        persist_page(&mut data_page, &mut file)?;
                     }
 
                     Ok(())
