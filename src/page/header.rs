@@ -2,12 +2,12 @@
 
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::page;
+use crate::{page, PAGE_SIZE};
 use crate::page::ty::PageType;
 use crate::space;
 use crate::util::Persistable;
 
-use super::PAGE_SIZE;
+pub const GENERAL_HEADER_SIZE: usize = 24;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
@@ -73,11 +73,9 @@ impl Persistable for GeneralHeader {
 
 #[cfg(test)]
 mod test {
+    use crate::page::header::GENERAL_HEADER_SIZE;
     use crate::util::Persistable;
-    use crate::{GeneralHeader, PageType};
-    use super::super::PAGE_SIZE;
-
-    const GENERAL_HEADER_SIZE: usize = 24;
+    use crate::{GeneralHeader, PageType, PAGE_SIZE};
 
     #[test]
     fn test_as_bytes() {

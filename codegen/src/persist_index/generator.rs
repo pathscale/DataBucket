@@ -101,8 +101,8 @@ impl Generator {
             .map(|f| f.ident.as_ref().unwrap())
             .map(|i| {
                 quote! {
-                    for page in &self.#i {
-                        persist_page(&page, file)?;
+                    for mut page in &mut self.#i {
+                        persist_page(&mut page, file)?;
                     }
                 }
             })
@@ -126,7 +126,7 @@ impl Generator {
                     header.unwrap()
                 }
 
-                pub fn persist(&self, file: &mut std::fs::File) -> eyre::Result<()> {
+                pub fn persist(&mut self, file: &mut std::fs::File) -> eyre::Result<()> {
                     #(#persist_logic)*
 
                     Ok(())

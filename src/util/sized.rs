@@ -46,10 +46,8 @@ impl SizeMeasurable for Uuid {
 // That was found on practice... Check unit test for proofs that works.
 impl SizeMeasurable for String {
     fn aligned_size(&self) -> usize {
-        if self.len() < 8 {
+        if self.len() <= 8 {
             8
-        } else if self.len() == 8 {
-            16
         } else {
             align(self.len() + 8)
         }
