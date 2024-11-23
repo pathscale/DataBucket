@@ -19,12 +19,6 @@ impl Generator {
     }
 
     fn gen_parse_info_fn(&self) -> syn::Result<TokenStream> {
-        let name = self.struct_def.ident.to_string().replace("WorkTable", "");
-        let const_name = Ident::new(
-            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
-            Span::mixed_site(),
-        );
-
         Ok(quote! {
             pub fn parse_info(file: &mut std::fs::File) -> eyre::Result<GeneralPage<SpaceInfoData>> {
                 use std::io;
@@ -35,10 +29,10 @@ impl Generator {
                 file.read(&mut buffer)?;
                 let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
                 let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
-                let header = archived.deserialize(&mut map)?;
+                let header: GeneralHeader = archived.deserialize(&mut map)?;
 
-                let mut buffer = [0; #const_name - HEADER_LENGTH];
-                file.read(&mut buffer)?;
+                let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
+                file.read_exact(&mut buffer)?;
                 let archived = unsafe { rkyv::archived_root::<SpaceInfoData>(&buffer[..]) };
                 let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
                 let info = archived.deserialize(&mut map)?;
