@@ -1,3 +1,4 @@
+
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
@@ -66,33 +67,14 @@ where
     Ok(())
 }
 
-pub fn parse_info(file: &mut std::fs::File) -> eyre::Result<GeneralPage<SpaceInfoData>> {
-    let mut buffer = [0; HEADER_SIZE];
-    file.read_exact(&mut buffer)?;
-    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
-    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
-    let header: GeneralHeader = archived.deserialize(&mut map)?;
-
-    let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
-    file.read_exact(&mut buffer)?;
-    let archived = unsafe { rkyv::archived_root::<SpaceInfoData>(&buffer[..]) };
-    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
-    let info = archived.deserialize(&mut map)?;
-
-    Ok(GeneralPage {
-        header,
-        inner: info,
-    })
-}
-
-pub fn parse_index<T, const PAGE_SIZE: u32>(
+pub fn parse_page<Page, const PAGE_SIZE: u32>(
     file: &mut std::fs::File,
     index: u32,
-) -> eyre::Result<GeneralPage<IndexData<T>>>
+) -> eyre::Result<GeneralPage<Page>>
 where
-    T: rkyv::Archive,
-    <T as rkyv::Archive>::Archived:
-        rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
+    Page: rkyv::Archive,
+    <Page as rkyv::Archive>::Archived:
+        rkyv::Deserialize<Page, rkyv::de::deserializers::SharedDeserializeMap>,
 {
     let mut buffer = [0; HEADER_SIZE];
     file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
@@ -103,13 +85,43 @@ where
 
     let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer)?;
-    let archived = unsafe { rkyv::archived_root::<IndexData<T>>(&buffer[..]) };
+    let archived = unsafe { rkyv::archived_root::<Page>(&buffer[..]) };
     let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
     let info = archived.deserialize(&mut map)?;
 
     Ok(GeneralPage {
         header,
         inner: info,
+    })
+}
+
+pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index: u32,
+) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>>
+{
+    let mut buffer = [0; HEADER_SIZE];
+    file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let header: GeneralHeader = archived.deserialize(&mut map)?;
+
+    let mut buffer = [0u8; INNER_PAGE_SIZE];
+    if header.next_id == 0.into() {
+        file.read(&mut buffer)?;
+    } else {
+        file.read_exact(&mut buffer)?;
+    }
+
+    let data = DataPage {
+        data: buffer,
+        length: header.data_length
+    };
+
+    Ok(GeneralPage {
+        header,
+        inner: data,
     })
 }
 
