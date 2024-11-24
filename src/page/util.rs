@@ -122,15 +122,21 @@ pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<
 {
     let mut pages: Vec<GeneralPage<Vec<u8>>> = vec![];
 
-    let mut header_buf: [u8; HEADER_LENGTH] = [0u8; HEADER_LENGTH];
-    file.read_exact(&mut header_buf)?;
-    let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
+    loop {
+        let mut header_buf: [u8; HEADER_LENGTH] = [0u8; HEADER_LENGTH];
+        file.read_exact(&mut header_buf)?;
+        let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
 
-    let mut inner_buf = vec![0u8; header.data_length as usize];
-    file.read_exact(&mut inner_buf)?;
+        let mut inner_buf = vec![0u8; header.data_length as usize];
+        file.read_exact(&mut inner_buf)?;
 
-    file.seek_relative(PAGE_SIZE as i64 - HEADER_LENGTH as i64 - header.data_length as i64)?;
-    pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
+        pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
+        let pos = file.seek(std::io::SeekFrom::Current(
+            PAGE_SIZE as i64 - HEADER_LENGTH as i64 - header.data_length as i64))?;
+        if pos >= file.metadata().unwrap().len() {
+            break;
+        }
+    }
 
     Ok(pages)
 }
