@@ -65,7 +65,12 @@ impl Generator {
             .struct_def
             .fields
             .iter()
-            .map(|f| (Literal::string(f.ident.as_ref().unwrap().to_string().as_str()), f.ident.as_ref().unwrap()))
+            .map(|f| {
+                (
+                    Literal::string(f.ident.as_ref().unwrap().to_string().as_str()),
+                    f.ident.as_ref().unwrap(),
+                )
+            })
             .map(|(l, i)| {
                 quote! {
                     let i = Interval (

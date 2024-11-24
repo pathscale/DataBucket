@@ -8,12 +8,12 @@ mod util;
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
+pub use data::Data;
 pub use header::GeneralHeader;
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
-pub use data::Data;
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
-pub use util::{map_index_pages_to_general, persist_page, map_data_pages_to_general};
+pub use util::{map_data_pages_to_general, map_index_pages_to_general, parse_info, persist_page, parse_index};
 
 // TODO: Move to config
 /// The size of a page. Header size and other parts are _included_ in this size.
