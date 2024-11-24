@@ -1,4 +1,4 @@
-use crate::{Persistable};
+use crate::Persistable;
 
 #[derive(Debug)]
 pub struct Data<const DATA_LENGTH: usize> {

@@ -76,8 +76,11 @@ where
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, rkyv::de::deserializers::SharedDeserializeMap>,
 {
+    let current_position = file.stream_position()?;
+    let start_pos = index as i64 * PAGE_SIZE as i64;
+    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
+
     let mut buffer = [0; HEADER_SIZE];
-    file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
     file.read_exact(&mut buffer)?;
     let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
     let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
@@ -100,8 +103,11 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
     index: u32,
 ) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>>
 {
+    let current_position = file.stream_position()?;
+    let start_pos = index as i64 * PAGE_SIZE as i64;
+    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
+
     let mut buffer = [0; HEADER_SIZE];
-    file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
     file.read_exact(&mut buffer)?;
     let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
     let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
