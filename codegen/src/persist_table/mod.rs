@@ -1,8 +1,8 @@
-use crate::persist_table::generator::Generator;
-use crate::persist_table::parser::Parser;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::spanned::Spanned;
+
+use crate::persist_table::generator::Generator;
+use crate::persist_table::parser::Parser;
 
 mod generator;
 mod parser;

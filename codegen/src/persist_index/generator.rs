@@ -171,7 +171,6 @@ impl Generator {
             .iter()
             .map(|f| {
                 (
-                    Literal::string(f.ident.as_ref().unwrap().to_string().as_str()),
                     f.ident.as_ref().unwrap(),
                     !f.ty
                         .to_token_stream()
@@ -180,8 +179,8 @@ impl Generator {
                         .contains("lockfree"),
                 )
             })
-            .map(|(l, i, is_unique)| {
-                let ty = self.field_types.get(&i).unwrap();
+            .map(|(i, is_unique)| {
+                let ty = self.field_types.get(i).unwrap();
                 if is_unique {
                     quote! {
                         let mut #i = map_index_pages_to_general(map_unique_tree_index::<#ty, #const_name>(&self.#i), previous_header);

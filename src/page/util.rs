@@ -68,7 +68,7 @@ where
 
 pub fn parse_info(file: &mut std::fs::File) -> eyre::Result<GeneralPage<SpaceInfoData>> {
     let mut buffer = [0; HEADER_SIZE];
-    file.read(&mut buffer)?;
+    file.read_exact(&mut buffer)?;
     let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
     let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
     let header: GeneralHeader = archived.deserialize(&mut map)?;
@@ -96,7 +96,7 @@ where
 {
     let mut buffer = [0; HEADER_SIZE];
     file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
-    file.read(&mut buffer)?;
+    file.read_exact(&mut buffer)?;
     let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
     let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
     let header: GeneralHeader = archived.deserialize(&mut map)?;

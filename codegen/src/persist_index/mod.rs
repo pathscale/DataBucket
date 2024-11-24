@@ -1,7 +1,5 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::parse::Parse;
-use syn::spanned::Spanned;
 
 use crate::persist_index::generator::Generator;
 use crate::persist_index::parser::Parser;

@@ -14,7 +14,7 @@ impl Parser {
     }
 
     pub fn parse_pk_ident(item: &ItemStruct) -> Ident {
-        /// WorkTable<#row_type, #pk_type, #index_type, <#pk_type as TablePrimaryKey>::Generator, #const_name>
+        // WorkTable<#row_type, #pk_type, #index_type, <#pk_type as TablePrimaryKey>::Generator, #const_name>
         let type_str = item
             .fields
             .iter()
@@ -25,14 +25,14 @@ impl Parser {
             .to_string();
         let mut split = type_str.split("<");
         split.next();
-        let gens = split.next().unwrap().split(",");
-        let index = gens.skip(1).next().unwrap();
+        let mut gens = split.next().unwrap().split(",");
+        let index = gens.nth(1).unwrap();
 
         Ident::new(index.trim(), Span::mixed_site())
     }
 
     pub fn parse_index_ident(item: &ItemStruct) -> Ident {
-        /// WorkTable<#row_type, #pk_type, #index_type, <#pk_type as TablePrimaryKey>::Generator, #const_name>
+        // WorkTable<#row_type, #pk_type, #index_type, <#pk_type as TablePrimaryKey>::Generator, #const_name>
         let type_str = item
             .fields
             .iter()
@@ -43,8 +43,8 @@ impl Parser {
             .to_string();
         let mut split = type_str.split("<");
         split.next();
-        let gens = split.next().unwrap().split(",");
-        let index = gens.skip(2).next().unwrap().replace(">", "");
+        let mut gens = split.next().unwrap().split(",");
+        let index = gens.nth(2).unwrap().replace(">", "");
 
         Ident::new(index.trim(), Span::mixed_site())
     }

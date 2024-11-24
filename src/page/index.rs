@@ -82,7 +82,7 @@ where
     let mut current_page = IndexPage::default();
     let mut current_size = 8;
 
-    for (key, &ref links) in index.iter(&guard) {
+    for (key, links) in index.iter(&guard) {
         for link in links.iter() {
             let index_value = IndexValue {
                 key: key.clone(),
