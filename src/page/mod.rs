@@ -8,12 +8,15 @@ mod util;
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
+pub use data::Data;
 pub use header::GeneralHeader;
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
-pub use data::Data;
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
-pub use util::{map_index_pages_to_general, persist_page, map_data_pages_to_general};
+pub use util::{
+    map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_page,
+    persist_page,
+};
 
 // TODO: Move to config
 /// The size of a page. Header size and other parts are _included_ in this size.
@@ -34,11 +37,11 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 /// * `data_length` - 4 bytes,
 ///
 /// **2 bytes are added by rkyv implicitly.**
-pub const HEADER_LENGTH: usize = 24;
+pub const GENERAL_HEADER_SIZE: usize = 24;
 
 /// Length of the inner part of [`General`] page. It's counted as [`PAGE_SIZE`]
-/// without [`General`] page [`HEADER_LENGTH`].
-pub const INNER_PAGE_LENGTH: usize = PAGE_SIZE - HEADER_LENGTH;
+/// without [`General`] page [`GENERAL_HEADER_SIZE`].
+pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
 
 /// Represents page's identifier. Is unique within the table bounds
 #[derive(
@@ -82,9 +85,8 @@ pub struct General<Inner> {
 #[cfg(test)]
 mod tests {
     use crate::page::ty::PageType;
-    use crate::page::{GeneralHeader, HEADER_LENGTH};
-
-    use super::PAGE_SIZE;
+    use crate::page::{GeneralHeader, GENERAL_HEADER_SIZE};
+    use crate::PAGE_SIZE;
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {
@@ -100,8 +102,8 @@ mod tests {
     #[test]
     fn general_header_length_valid() {
         let header = get_general_header();
-        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&header).unwrap();
+        let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
 
-        assert_eq!(bytes.len(), HEADER_LENGTH)
+        assert_eq!(bytes.len(), GENERAL_HEADER_SIZE)
     }
 }

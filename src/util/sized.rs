@@ -65,7 +65,7 @@ mod test {
         // Test if approximate size is correct for strings
         for i in 0..10_000 {
             let s = String::from_utf8(vec![b'a'; i]).unwrap();
-            assert_eq!(s.aligned_size(), rkyv::to_bytes::<rkyv::rancor::Error>(&s).unwrap().len())
+            assert_eq!(s.aligned_size(), rkyv::to_bytes::<_, 0>(&s).unwrap().len())
         }
     }
 }

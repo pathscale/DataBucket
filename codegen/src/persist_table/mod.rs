@@ -1,8 +1,8 @@
-use crate::persist_table::generator::Generator;
-use crate::persist_table::parser::Parser;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::spanned::Spanned;
+
+use crate::persist_table::generator::Generator;
+use crate::persist_table::parser::Parser;
 
 mod generator;
 mod parser;
@@ -19,7 +19,6 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     };
 
     let space_type = gen.gen_space_type()?;
-    let space_deserialize = gen.gen_deserialize()?;
     let space_impl = gen.gen_space_impls()?;
     let size_measurable_impl = gen.gen_size_measurable_impl()?;
 
@@ -28,6 +27,5 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 
         #space_type
         #space_impl
-        #space_deserialize
     })
 }

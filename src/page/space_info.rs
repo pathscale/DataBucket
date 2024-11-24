@@ -4,11 +4,9 @@ use std::collections::HashMap;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
-use crate::page::GeneralHeader;
+use crate::page::{GeneralHeader, INNER_PAGE_SIZE};
 use crate::util::Persistable;
-use crate::{page, space};
-
-use super::PAGE_SIZE;
+use crate::{page, space, PAGE_SIZE};
 
 pub type SpaceName = String;
 
@@ -56,7 +54,7 @@ impl From<SpaceInfo> for page::General<SpaceInfo> {
 
 impl Persistable for SpaceInfo {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+        rkyv::to_bytes::<_, { INNER_PAGE_SIZE }>(self).unwrap()
     }
 }
 
@@ -64,7 +62,7 @@ impl Persistable for SpaceInfo {
 mod test {
     use std::collections::HashMap;
 
-    use crate::page::{SpaceInfo, INNER_PAGE_LENGTH};
+    use crate::page::{SpaceInfo, INNER_PAGE_SIZE};
     use crate::util::Persistable;
 
     #[test]
@@ -75,9 +73,9 @@ mod test {
             name: "Test".to_string(),
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::new(),
-            data_intervals: vec![]
+            data_intervals: vec![],
         };
         let bytes = info.as_bytes();
-        assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)
+        assert!(bytes.as_ref().len() < INNER_PAGE_SIZE)
     }
 }

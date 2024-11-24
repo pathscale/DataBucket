@@ -1,15 +1,11 @@
-use std::io::Read;
-
-use rkyv::api::low::deserialize;
-use rkyv::Archive;
+use rkyv::Deserialize;
+use std::io;
+use std::io::prelude::*;
 
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Persistable, PAGE_SIZE};
-
-use super::header::ArchivedGeneralHeader;
-use super::{header, ArchivedGeneral, HEADER_LENGTH, INNER_PAGE_LENGTH};
+use crate::{DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -51,49 +47,97 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     general_pages
 }
 
-pub fn persist_page<T>(page: &GeneralPage<T>, file: &mut std::fs::File) -> eyre::Result<()>
+pub fn persist_page<T>(page: &mut GeneralPage<T>, file: &mut std::fs::File) -> eyre::Result<()>
 where
     T: Persistable,
 {
     use std::io::prelude::*;
 
     let page_count = page.header.page_id.0 as i64 + 1;
+    let inner_bytes = page.inner.as_bytes();
+    page.header.data_length = inner_bytes.as_ref().len() as u32;
 
     file.write_all(page.header.as_bytes().as_ref())?;
-    file.write_all(page.inner.as_bytes().as_ref())?;
+    file.write_all(inner_bytes.as_ref())?;
     let curr_position = file.stream_position()?;
-    file.seek(std::io::SeekFrom::Current(
+    file.seek(io::SeekFrom::Current(
         (page_count * PAGE_SIZE as i64) - curr_position as i64,
     ))?;
 
     Ok(())
 }
 
-pub fn load_pages<T>(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<T>>>
+pub fn parse_page<Page, const PAGE_SIZE: u32>(
+    file: &mut std::fs::File,
+    index: u32,
+) -> eyre::Result<GeneralPage<Page>>
 where
-    T: Archive
+    Page: rkyv::Archive,
+    <Page as rkyv::Archive>::Archived:
+        rkyv::Deserialize<Page, rkyv::de::deserializers::SharedDeserializeMap>,
 {
-    let mut buf: [u8; HEADER_LENGTH];
-    file.read_exact(&mut buf)?;
+    let current_position = file.stream_position()?;
+    let start_pos = index as i64 * PAGE_SIZE as i64;
+    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
 
-    let header = rkyv::access::<ArchivedGeneralHeader, rkyv::rancor::Error>(&buf)?;
-    
-    let mut page_data: [u8; INNER_PAGE_LENGTH];
-    file.read_exact(&mut page_data);
+    let mut buffer = [0; GENERAL_HEADER_SIZE];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let header: GeneralHeader = archived.deserialize(&mut map)?;
 
-    let general_page: GeneralPage<T> = GeneralPage{
-        header: deserialize(header)?,
-        inner: deserialize(page_data)?,
+    let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<Page>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let info = archived.deserialize(&mut map)?;
+
+    Ok(GeneralPage {
+        header,
+        inner: info,
+    })
+}
+
+pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index: u32,
+) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+    let current_position = file.stream_position()?;
+    let start_pos = index as i64 * PAGE_SIZE as i64;
+    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
+
+    let mut buffer = [0; GENERAL_HEADER_SIZE];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let header: GeneralHeader = archived.deserialize(&mut map)?;
+
+    let mut buffer = [0u8; INNER_PAGE_SIZE];
+    if header.next_id == 0.into() {
+        file.read(&mut buffer)?;
+    } else {
+        file.read_exact(&mut buffer)?;
+    }
+
+    let data = DataPage {
+        data: buffer,
+        length: header.data_length,
     };
-    Ok(vec![general_page])
+
+    Ok(GeneralPage {
+        header,
+        inner: data,
+    })
 }
 
 #[cfg(test)]
 mod test {
     use scc::TreeIndex;
 
-    use crate::page::INNER_PAGE_LENGTH;
-    use crate::{map_index_pages_to_general, page::map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE};
+    use crate::page::INNER_PAGE_SIZE;
+    use crate::{
+        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE,
+    };
 
     #[test]
     fn test_map() {
@@ -107,7 +151,7 @@ mod test {
             index.insert(i, l).expect("is ok");
         }
 
-        let res = map_unique_tree_index::<_, { INNER_PAGE_LENGTH }>(&index);
+        let res = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(&index);
         let mut header = GeneralHeader {
             space_id: 0.into(),
             page_id: 0.into(),
