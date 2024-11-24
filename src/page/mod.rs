@@ -37,11 +37,11 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 /// * `data_length` - 4 bytes,
 ///
 /// **2 bytes are added by rkyv implicitly.**
-pub const HEADER_SIZE: usize = 24;
+pub const GENERAL_HEADER_SIZE: usize = 24;
 
 /// Length of the inner part of [`General`] page. It's counted as [`PAGE_SIZE`]
-/// without [`General`] page [`HEADER_SIZE`].
-pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - HEADER_SIZE;
+/// without [`General`] page [`GENERAL_HEADER_SIZE`].
+pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
 
 /// Represents page's identifier. Is unique within the table bounds
 #[derive(
@@ -85,7 +85,7 @@ pub struct General<Inner> {
 #[cfg(test)]
 mod tests {
     use crate::page::ty::PageType;
-    use crate::page::{GeneralHeader, HEADER_SIZE};
+    use crate::page::{GeneralHeader, GENERAL_HEADER_SIZE};
     use crate::PAGE_SIZE;
 
     fn get_general_header() -> GeneralHeader {
@@ -104,6 +104,6 @@ mod tests {
         let header = get_general_header();
         let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
 
-        assert_eq!(bytes.len(), HEADER_SIZE)
+        assert_eq!(bytes.len(), GENERAL_HEADER_SIZE)
     }
 }

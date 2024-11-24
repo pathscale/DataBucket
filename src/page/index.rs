@@ -36,7 +36,7 @@ pub struct IndexPage<T> {
 }
 
 // Manual `Default` implementation to avoid `T: Default`
-impl<T> Default for IndexPage<T> {
+impl<'a, T> Default for IndexPage<T> {
     fn default() -> Self {
         Self {
             index_values: vec![],
@@ -45,7 +45,8 @@ impl<T> Default for IndexPage<T> {
 }
 
 impl<T> IndexPage<T>
-where T: Clone + Ord + Debug + 'static
+where
+    T: Clone + Ord + Debug + 'static,
 {
     pub fn append_to_unique_tree_index(self, index: &TreeIndex<T, Link>) {
         for val in self.index_values {
@@ -141,9 +142,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
     use scc::ebr::Guard;
     use scc::TreeIndex;
+    use std::sync::Arc;
 
     use crate::page::index::map_unique_tree_index;
     use crate::page::{INNER_PAGE_SIZE, PAGE_SIZE};

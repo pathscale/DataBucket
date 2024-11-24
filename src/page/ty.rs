@@ -15,7 +15,6 @@ use rkyv::{Archive, Deserialize, Serialize};
     PartialOrd,
     Serialize,
 )]
-#[archive_attr(repr(u16))]
 #[repr(u16)]
 pub enum PageType {
     /// Header for empty `Page`. Used in case page is just allocated.
