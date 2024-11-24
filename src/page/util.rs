@@ -6,11 +6,10 @@ use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
 use crate::{DataPage, GeneralPage, IndexData, Persistable, SpaceInfoData, HEADER_SIZE, PAGE_SIZE};
-use rkyv::Deserialize;
 use std::io;
 use std::io::prelude::*;
 
-use super::{header, HEADER_LENGTH};
+use super::header;
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -117,13 +116,14 @@ where
         header,
         inner: info,
     })
+}
 
 pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<u8>>>>
 {
     let mut pages: Vec<GeneralPage<Vec<u8>>> = vec![];
 
     loop {
-        let mut header_buf: [u8; HEADER_LENGTH] = [0u8; HEADER_LENGTH];
+        let mut header_buf: [u8; HEADER_SIZE] = [0u8; HEADER_SIZE];
         file.read_exact(&mut header_buf)?;
         let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
 
@@ -132,7 +132,7 @@ pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<
 
         pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
         let pos = file.seek(std::io::SeekFrom::Current(
-            PAGE_SIZE as i64 - HEADER_LENGTH as i64 - header.data_length as i64))?;
+            PAGE_SIZE as i64 - HEADER_SIZE as i64 - header.data_length as i64))?;
         if pos >= file.metadata().unwrap().len() {
             break;
         }
@@ -147,17 +147,10 @@ mod test {
 
     use scc::TreeIndex;
 
-<<<<<<< HEAD
     use crate::page::INNER_PAGE_SIZE;
-    use crate::{
-        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE,
-    };
-=======
-    use crate::page::INNER_PAGE_LENGTH;
     use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, GeneralPage, Link, PageType, PAGE_SIZE};
 
     use super::{load_pages, persist_page};
->>>>>>> e5c440c (Add CLI tools `create-data-file` and `dump-data-file`)
 
     #[test]
     fn test_map() {
