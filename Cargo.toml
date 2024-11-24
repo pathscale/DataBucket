@@ -1,5 +1,5 @@
 [workspace]
-members = ["codegen"]
+members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
@@ -17,3 +17,6 @@ lockfree = "0.5.1"
 serde = { version = "1.0.215", features = ["derive"] }
 uuid = { version = "1.11.0", features = ["v4"] }
 bitcode = "0.6.3"
+
+[dev-dependencies]
+mktemp = "0.4.0"
