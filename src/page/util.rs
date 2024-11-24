@@ -1,11 +1,11 @@
+use rkyv::Deserialize;
+use std::io;
+use std::io::prelude::*;
 
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Persistable, SpaceInfoData, HEADER_SIZE, PAGE_SIZE};
-use rkyv::Deserialize;
-use std::io;
-use std::io::prelude::*;
+use crate::{DataPage, GeneralPage, IndexData, Persistable, HEADER_SIZE, PAGE_SIZE};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -101,8 +101,7 @@ where
 pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
     file: &mut std::fs::File,
     index: u32,
-) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>>
-{
+) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     let current_position = file.stream_position()?;
     let start_pos = index as i64 * PAGE_SIZE as i64;
     file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
@@ -122,7 +121,7 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
 
     let data = DataPage {
         data: buffer,
-        length: header.data_length
+        length: header.data_length,
     };
 
     Ok(GeneralPage {
