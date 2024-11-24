@@ -146,12 +146,6 @@ impl Generator {
             format!("{}Persisted", self.struct_def.ident).as_str(),
             Span::mixed_site(),
         );
-        let name = self.struct_def.ident.to_string().replace("Index", "");
-        let const_name = Ident::new(
-            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
-            Span::mixed_site(),
-        );
-
         let field_names_lits: Vec<_> = self
             .struct_def
             .fields
@@ -159,6 +153,29 @@ impl Generator {
             .map(|f| Literal::string(f.ident.as_ref().unwrap().to_string().as_str()))
             .map(|l| quote! { #l, })
             .collect();
+        let persisted_index_fn = self.gen_persisted_index_fn()?;
+        let from_persisted_fn = self.gen_from_persisted_fn()?;
+
+        Ok(quote! {
+            impl PersistableIndex for #ident {
+                type PersistedIndex = #name_ident;
+
+                fn get_index_names(&self) -> Vec<&str> {
+                    vec![#(#field_names_lits)*]
+                }
+
+                #persisted_index_fn
+                #from_persisted_fn
+            }
+        })
+    }
+
+    fn gen_persisted_index_fn(&self) -> syn::Result<TokenStream> {
+        let name = self.struct_def.ident.to_string().replace("Index", "");
+        let const_name = Ident::new(
+            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            Span::mixed_site(),
+        );
         let idents = self
             .struct_def
             .fields
@@ -196,21 +213,61 @@ impl Generator {
             .collect();
 
         Ok(quote! {
-            impl PersistableIndex for #ident {
-                type PersistedIndex = #name_ident;
+            fn get_persisted_index(&self, header: &mut GeneralHeader) -> Self::PersistedIndex {
+                let mut previous_header = header;
 
-                fn get_index_names(&self) -> Vec<&str> {
-                    vec![#(#field_names_lits)*]
+                #(#field_names_init)*
+
+                Self::PersistedIndex {
+                    #(#idents,)*
                 }
+            }
+        })
+    }
 
-                fn get_persisted_index(&self, header: &mut GeneralHeader) -> Self::PersistedIndex {
-                    let mut previous_header = header;
-
-                    #(#field_names_init)*
-
-                    Self::PersistedIndex {
-                        #(#idents,)*
+    fn gen_from_persisted_fn(&self) -> syn::Result<TokenStream> {
+        let idents = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| f.ident.as_ref().unwrap())
+            .collect::<Vec<_>>();
+        let index_gen = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| {
+                let i = f.ident.as_ref().unwrap();
+                let ty_ = &f.ty;
+                let is_unique = !f.ty
+                    .to_token_stream()
+                    .to_string()
+                    .to_lowercase()
+                    .contains("lockfree");
+                if is_unique {
+                    quote! {
+                        let #i = TreeIndex::new();
+                        for page in persisted.#i {
+                            page.inner.append_to_unique_tree_index(&#i);
+                        }
                     }
+                } else {
+                    quote! {
+                        let #i = TreeIndex::new();
+                        for page in persisted.#i {
+                            page.inner.append_to_tree_index(&#i);
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(quote! {
+            fn from_persisted(persisted: Self::PersistedIndex) -> Self {
+                #(#index_gen)*
+
+                Self {
+                    #(#idents,)*
                 }
             }
         })

@@ -5,7 +5,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::page::ty::PageType;
 use crate::space;
 use crate::util::Persistable;
-use crate::{page, PAGE_SIZE, GENERAL_HEADER_SIZE};
+use crate::{page, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 /// Header that appears on every page before it's inner data.
 #[derive(
