@@ -8,7 +8,7 @@ use scc::ebr::Guard;
 use scc::TreeIndex;
 
 use crate::link::Link;
-use crate::page::INNER_PAGE_LENGTH;
+use crate::page::INNER_PAGE_SIZE;
 use crate::util::{Persistable, SizeMeasurable};
 
 /// Represents `key/value` pair of B-Tree index, where value is always
@@ -104,10 +104,10 @@ where
 
 impl<T> Persistable for IndexPage<T>
 where
-    T: Archive + Serialize<AllocSerializer<{ INNER_PAGE_LENGTH }>>,
+    T: Archive + Serialize<AllocSerializer<{ INNER_PAGE_SIZE }>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<_, { INNER_PAGE_LENGTH }>(self).unwrap()
+        rkyv::to_bytes::<_, { INNER_PAGE_SIZE }>(self).unwrap()
     }
 }
 
@@ -116,7 +116,7 @@ mod test {
     use scc::TreeIndex;
 
     use crate::page::index::map_unique_tree_index;
-    use crate::page::{INNER_PAGE_LENGTH, PAGE_SIZE};
+    use crate::page::{INNER_PAGE_SIZE, PAGE_SIZE};
     use crate::util::{Persistable, SizeMeasurable};
     use crate::Link;
 
@@ -209,10 +209,10 @@ mod test {
             };
             index.insert(i, l).expect("is ok");
         }
-        let pages = map_unique_tree_index::<_, { INNER_PAGE_LENGTH }>(&index);
+        let pages = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(&index);
         let page = pages.get(0).unwrap();
 
         let bytes = page.as_bytes();
-        assert!(bytes.as_ref().len() <= INNER_PAGE_LENGTH)
+        assert!(bytes.as_ref().len() <= INNER_PAGE_SIZE)
     }
 }

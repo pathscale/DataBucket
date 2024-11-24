@@ -13,14 +13,14 @@ impl Generator {
             format!("{}IndexPersisted", name).as_str(),
             Span::mixed_site(),
         );
-        let const_name = Ident::new(
-            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+        let inner_const_name = Ident::new(
+            format!("{}_INNER_SIZE", name.to_uppercase()).as_str(),
             Span::mixed_site(),
         );
 
         Ok(quote! {
             #[derive(Debug)]
-            pub struct #name_ident<const DATA_LENGTH: usize = #const_name > {
+            pub struct #name_ident<const DATA_LENGTH: usize = #inner_const_name > {
                 pub path: String,
 
                 pub info: GeneralPage<SpaceInfoData>,
@@ -83,7 +83,7 @@ impl Generator {
     fn gen_persisted_primary_key_fn(&self) -> syn::Result<TokenStream> {
         let name = self.struct_def.ident.to_string().replace("WorkTable", "");
         let const_name = Ident::new(
-            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            format!("{}_INNER_SIZE", name.to_uppercase()).as_str(),
             Span::mixed_site(),
         );
         let pk_type = &self.pk_ident;
@@ -99,7 +99,7 @@ impl Generator {
         let ident = &self.struct_def.ident;
         let name = self.struct_def.ident.to_string().replace("WorkTable", "");
         let const_name = Ident::new(
-            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            format!("{}_INNER_SIZE", name.to_uppercase()).as_str(),
             Span::mixed_site(),
         );
         let space_ident = Ident::new(format!("{}Space", name).as_str(), Span::mixed_site());
