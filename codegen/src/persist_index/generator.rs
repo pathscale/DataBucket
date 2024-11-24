@@ -113,6 +113,7 @@ impl Generator {
             })
             .collect::<Vec<_>>();
 
+        let parse_from_file = self.gen_parse_from_file()?;
         Ok(quote! {
             impl #name_ident {
                 pub fn get_intervals(&self) -> std::collections::HashMap<String, Vec<Interval>> {
@@ -136,6 +137,50 @@ impl Generator {
 
                     Ok(())
                 }
+
+                #parse_from_file
+            }
+        })
+    }
+
+    pub fn gen_parse_from_file(&self) -> syn::Result<TokenStream> {
+        let name = self.struct_def.ident.to_string().replace("Index", "");
+        let page_const_name = Ident::new(
+            format!("{}_PAGE_SIZE", name.to_uppercase()).as_str(),
+            Span::mixed_site(),
+        );
+        let field_names_lits: Vec<_> = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| (Literal::string(f.ident.as_ref().unwrap().to_string().as_str()), f.ident.as_ref().unwrap()))
+            .map(|(l, i)| quote! {
+                let mut #i = vec![];
+                let intervals = map.get(#l).expect("exists");
+                for interval in intervals {
+                    for page_id in interval.0..interval.1 {
+                        let index = parse_page::<IndexData<_>, { #page_const_name as u32 }>(file, page_id as u32)?;
+                        #i.push(index);
+                    }
+                    let index = parse_page::<IndexData<_>, { #page_const_name as u32 }>(file, interval.1 as u32)?;
+                    #i.push(index);
+                }
+            })
+            .collect();
+        let idents = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| f.ident.as_ref().unwrap())
+            .collect::<Vec<_>>();
+
+        Ok(quote! {
+            pub fn parse_from_file(file: &mut std::fs::File, map: &std::collections::HashMap<String, Vec<Interval>>) -> eyre::Result<Self> {
+                #(#field_names_lits)*
+
+                Ok(Self {
+                    #(#idents,)*
+                })
             }
         })
     }
@@ -238,7 +283,6 @@ impl Generator {
             .iter()
             .map(|f| {
                 let i = f.ident.as_ref().unwrap();
-                let ty_ = &f.ty;
                 let is_unique = !f.ty
                     .to_token_stream()
                     .to_string()
