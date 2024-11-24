@@ -141,7 +141,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::ops::Deref;
     use std::sync::Arc;
     use scc::ebr::Guard;
     use scc::TreeIndex;
