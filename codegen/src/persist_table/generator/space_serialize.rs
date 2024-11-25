@@ -52,10 +52,11 @@ impl Generator {
 
     fn gen_space_info_fn(&self) -> syn::Result<TokenStream> {
         let name = self.struct_def.ident.to_string().replace("WorkTable", "");
+        let pk = &self.pk_ident;
         let literal_name = Literal::string(name.as_str());
 
         Ok(quote! {
-            pub fn space_info_default() -> GeneralPage<SpaceInfoData> {
+            pub fn space_info_default() -> GeneralPage<SpaceInfoData<<<#pk as TablePrimaryKey>::Generator as PrimaryKeyGeneratorState>::State>> {
                 let inner = SpaceInfoData {
                     id: 0.into(),
                     page_count: 0,
@@ -63,6 +64,8 @@ impl Generator {
                     primary_key_intervals: vec![],
                     secondary_index_intervals: std::collections::HashMap::new(),
                     data_intervals: vec![],
+                    pk_gen_state: <<#pk as TablePrimaryKey>::Generator as PrimaryKeyGeneratorState>::State::default(),
+                    empty_links_list: vec![]
                 };
                 let header = GeneralHeader {
                     page_id: 0.into(),
@@ -109,6 +112,8 @@ impl Generator {
                 let path = self.1.config_path.clone();
 
                 let mut info = #ident::space_info_default();
+                info.inner.pk_gen_state = self.0.pk_gen.get_state();
+                info.inner.empty_links_list = self.0.data.get_empty_links();
                 info.inner.page_count = 1;
                 let mut header = &mut info.header;
 

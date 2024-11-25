@@ -8,5 +8,4 @@ mod space_serialize;
 pub struct Generator {
     pub struct_def: ItemStruct,
     pub pk_ident: Ident,
-    pub index_ident: Ident,
 }
