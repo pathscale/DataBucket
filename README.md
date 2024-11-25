@@ -14,4 +14,4 @@ the content of the pages is provided using the `--page-content` command line fla
 
 ### `dump-data-file`
 
-Loads the data from a file and prits it. The filename is provided using the `--filename` commnad line flag.
+Loads the data from a file and prints it. The filename is provided using the `--filename` command line flag.
