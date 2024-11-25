@@ -1,5 +1,6 @@
 //! [`IndexPage`] definition.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use rkyv::ser::serializers::AllocSerializer;
@@ -35,13 +36,41 @@ pub struct IndexPage<T> {
 }
 
 // Manual `Default` implementation to avoid `T: Default`
-impl<T> Default for IndexPage<T> {
+impl<'a, T> Default for IndexPage<T> {
     fn default() -> Self {
         Self {
             index_values: vec![],
         }
     }
 }
+
+impl<T> IndexPage<T>
+where
+    T: Clone + Ord + Debug + 'static,
+{
+    pub fn append_to_unique_tree_index(self, index: &TreeIndex<T, Link>) {
+        for val in self.index_values {
+            // Errors only if key is already exists.
+            index.insert(val.key, val.link).expect("index is unique");
+        }
+    }
+
+    pub fn append_to_tree_index(self, index: &TreeIndex<T, Arc<lockfree::set::Set<Link>>>) {
+        for val in self.index_values {
+            let guard = Guard::new();
+            if let Some(set) = index.peek(&val.key, &guard) {
+                set.insert(val.link).expect("is ok");
+            } else {
+                let set = lockfree::set::Set::new();
+                set.insert(val.link).expect("is ok");
+                index
+                    .insert(val.key, Arc::new(set))
+                    .expect("index is unique");
+            }
+        }
+    }
+}
+
 pub fn map_unique_tree_index<T, const PAGE_SIZE: usize>(
     index: &TreeIndex<T, Link>,
 ) -> Vec<IndexPage<T>>
@@ -113,12 +142,14 @@ where
 
 #[cfg(test)]
 mod test {
+    use scc::ebr::Guard;
     use scc::TreeIndex;
+    use std::sync::Arc;
 
     use crate::page::index::map_unique_tree_index;
     use crate::page::{INNER_PAGE_SIZE, PAGE_SIZE};
     use crate::util::{Persistable, SizeMeasurable};
-    use crate::Link;
+    use crate::{map_tree_index, Link};
 
     #[test]
     fn map_single_value() {
@@ -173,6 +204,63 @@ mod test {
         // As 16 + 8
         assert_eq!(rkyv::to_bytes::<_, 0>(&res[0]).unwrap().len(), 16_376);
         assert_eq!(rkyv::to_bytes::<_, 0>(&res[1]).unwrap().len(), 24);
+    }
+
+    #[test]
+    fn map_unique_and_back() {
+        let index = TreeIndex::new();
+        for i in 0..1023 {
+            let l = Link {
+                page_id: 1.into(),
+                offset: 0,
+                length: 32,
+            };
+            index.insert(i, l).expect("is ok");
+        }
+
+        let pages = map_unique_tree_index::<_, { PAGE_SIZE }>(&index);
+        let res_index = TreeIndex::new();
+
+        for page in pages {
+            page.append_to_unique_tree_index(&res_index)
+        }
+
+        assert_eq!(index, res_index)
+    }
+
+    #[test]
+    fn map_and_back() {
+        let index = TreeIndex::new();
+        for i in 0..256 {
+            let set = lockfree::set::Set::new();
+            for j in 0..4 {
+                let l = Link {
+                    page_id: j.into(),
+                    offset: 0,
+                    length: 32,
+                };
+                set.insert(l).unwrap();
+            }
+
+            index.insert(i, Arc::new(set)).expect("is ok");
+        }
+
+        let pages = map_tree_index::<_, { PAGE_SIZE }>(&index);
+        let res_index = TreeIndex::new();
+
+        for page in pages {
+            page.append_to_tree_index(&res_index)
+        }
+
+        let guard = Guard::new();
+        for (k, set) in index.iter(&guard) {
+            let res_guard = Guard::new();
+            let res_set = res_index.peek(k, &res_guard).expect("exists");
+
+            for v in set.iter() {
+                assert!(res_set.contains(&v))
+            }
+        }
     }
 
     #[test]

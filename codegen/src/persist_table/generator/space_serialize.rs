@@ -126,8 +126,9 @@ impl Generator {
                 info.inner.secondary_index_intervals = secondary_intevals;
 
                 let previous_header = indexes.get_last_header_mut();
-                let data = map_data_pages_to_general(self.0.data.get_bytes().into_iter().map(|b| DataPage {
-                    data: b
+                let data = map_data_pages_to_general(self.0.data.get_bytes().into_iter().map(|(b, offset)| DataPage {
+                    data: b,
+                    length: offset,
                 }).collect::<Vec<_>>(), previous_header);
                 let interval = Interval(
                     data.first().unwrap().header.page_id.into(),
@@ -166,7 +167,7 @@ impl Generator {
                         persist_page(&mut primary_index_page, &mut file)?;
                     }
                     self.indexes.persist(&mut file)?;
-                    for mut data_page in &mut self.primary_index {
+                    for mut data_page in &mut self.data {
                         persist_page(&mut data_page, &mut file)?;
                     }
 

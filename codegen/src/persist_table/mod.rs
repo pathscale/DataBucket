@@ -20,6 +20,7 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 
     let space_type = gen.gen_space_type()?;
     let space_impl = gen.gen_space_impls()?;
+    let deserialize_impl = gen.gen_space_deserialize_impls()?;
     let size_measurable_impl = gen.gen_size_measurable_impl()?;
 
     Ok(quote! {
@@ -27,5 +28,6 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 
         #space_type
         #space_impl
+        #deserialize_impl
     })
 }
