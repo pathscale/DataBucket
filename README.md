@@ -1,6 +1,6 @@
 # DataBucket
 
-This is a library for writing and reading data in files.
+This is a library for writing and reading data files.
 
 ## Command line tools
 
