@@ -27,7 +27,8 @@ impl Generator {
 
         Ok(quote! {
             pub fn into_worktable(self, db_manager: std::sync::Arc<DatabaseManager>) -> #wt_ident {
-                let data = DataPages::from_data(self.data.into_iter().map(|p| std::sync::Arc::new(Data::from_data_page(p))).collect());
+                let data = DataPages::from_data(self.data.into_iter().map(|p| std::sync::Arc::new(Data::from_data_page(p))).collect())
+                    .with_empty_links(self.info.inner.empty_links_list);
                 let indexes = #index_ident::from_persisted(self.indexes);
 
                 let pk_map = TreeIndex::new();
@@ -39,7 +40,7 @@ impl Generator {
                     data,
                     pk_map,
                     indexes,
-                    pk_gen: Default::default(),
+                    pk_gen: PrimaryKeyGeneratorState::from_state(self.info.inner.pk_gen_state),
                     lock_map: LockMap::new(),
                     table_name: "",
                 };
@@ -70,7 +71,7 @@ impl Generator {
 
         Ok(quote! {
             pub fn parse_file(file: &mut std::fs::File) -> eyre::Result<Self> {
-                let info = parse_page::<SpaceInfoData, { #page_const_name as u32 }>(file, 0)?;
+                let info = parse_page::<SpaceInfoData<<<#pk_type as TablePrimaryKey>::Generator as PrimaryKeyGeneratorState>::State>, { #page_const_name as u32 }>(file, 0)?;
 
                 let mut primary_index = vec![];
                 for interval in &info.inner.primary_key_intervals {

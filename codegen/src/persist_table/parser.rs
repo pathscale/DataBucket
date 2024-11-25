@@ -30,22 +30,4 @@ impl Parser {
 
         Ident::new(index.trim(), Span::mixed_site())
     }
-
-    pub fn parse_index_ident(item: &ItemStruct) -> Ident {
-        // WorkTable<#row_type, #pk_type, #index_type, <#pk_type as TablePrimaryKey>::Generator, #const_name>
-        let type_str = item
-            .fields
-            .iter()
-            .next()
-            .unwrap()
-            .ty
-            .to_token_stream()
-            .to_string();
-        let mut split = type_str.split("<");
-        split.next();
-        let mut gens = split.next().unwrap().split(",");
-        let index = gens.nth(2).unwrap().replace(">", "");
-
-        Ident::new(index.trim(), Span::mixed_site())
-    }
 }
