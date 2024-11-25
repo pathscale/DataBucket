@@ -13,6 +13,8 @@ struct Args {
 
 fn main() -> eyre::Result<()> {
     let args = Args::parse();
+    _ = remove_file(args.filename.as_str());
+    let mut output_file = File::create(args.filename.as_str())?;
 
     for page_id in 0..args.pages_count {
         let header: GeneralHeader = GeneralHeader {
@@ -26,8 +28,6 @@ fn main() -> eyre::Result<()> {
         let inner: String = "hello".into();
         let mut page: GeneralPage<String> = GeneralPage { header, inner };
 
-        _ = remove_file(args.filename.as_str());
-        let mut output_file = File::create(args.filename.as_str())?;
         persist_page(&mut page, &mut output_file)?;
     }
 

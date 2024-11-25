@@ -5,7 +5,7 @@ use rkyv::{Archive, Deserialize};
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Persistable, SpaceInfoData, HEADER_SIZE, PAGE_SIZE};
+use crate::{DataPage, GeneralPage, IndexData, Persistable, SpaceInfoData, GENERAL_HEADER_SIZE, PAGE_SIZE};
 use std::io;
 use std::io::prelude::*;
 
@@ -139,7 +139,7 @@ pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<
     let mut pages: Vec<GeneralPage<Vec<u8>>> = vec![];
 
     loop {
-        let mut header_buf: [u8; HEADER_SIZE] = [0u8; HEADER_SIZE];
+        let mut header_buf: [u8; GENERAL_HEADER_SIZE] = [0u8; GENERAL_HEADER_SIZE];
         file.read_exact(&mut header_buf)?;
         let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
 
@@ -148,7 +148,7 @@ pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<
 
         pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
         let pos = file.seek(std::io::SeekFrom::Current(
-            PAGE_SIZE as i64 - HEADER_SIZE as i64 - header.data_length as i64))?;
+            PAGE_SIZE as i64 - GENERAL_HEADER_SIZE as i64 - header.data_length as i64))?;
         if pos >= file.metadata().unwrap().len() {
             break;
         }
