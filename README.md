@@ -4,6 +4,8 @@ This is a library for writing and reading data in files.
 
 ## Command line tools
 
+The command line tools reside in the `tools` directory.
+
 ### `create-data-file`
 
 Creates a data file with test data. The filename is provided using the `--filename` command line flag,
