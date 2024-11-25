@@ -9,6 +9,8 @@ struct Args {
     filename: String,
     #[arg(short, long)]
     pages_count: u32,
+    #[arg(long, default_value_t = ("hello".to_string()))]
+    page_content: String,
 }
 
 fn main() -> eyre::Result<()> {
@@ -25,8 +27,7 @@ fn main() -> eyre::Result<()> {
             page_type: PageType::SpaceInfo,
             data_length: 0 as u32,
         };
-        let inner: String = "hello".into();
-        let mut page: GeneralPage<String> = GeneralPage { header, inner };
+        let mut page: GeneralPage<String> = GeneralPage { header, inner: args.page_content.clone() };
 
         persist_page(&mut page, &mut output_file)?;
     }
