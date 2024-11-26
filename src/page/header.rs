@@ -80,6 +80,12 @@ mod test {
     use crate::page::header::DATA_VERSION;
     use crate::util::Persistable;
     use crate::{GeneralHeader, PageType, GENERAL_HEADER_SIZE, PAGE_SIZE};
+    
+    #[test]
+    fn test_data_version() {
+        let header = GeneralHeader::new(1.into(), PageType::Empty, 2.into());
+        assert_eq!(header.data_version, 1u32);
+    }
 
     #[test]
     fn test_as_bytes() {
