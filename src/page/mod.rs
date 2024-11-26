@@ -29,6 +29,7 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 ///
 /// Length of the values are:
 ///
+/// * `data_version` - 4 bytes,
 /// * `page_id` - 4 bytes,
 /// * `previous_id` - 4 bytes,
 /// * `next_id` - 4 bytes,
