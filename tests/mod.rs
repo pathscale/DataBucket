@@ -1,4 +1,4 @@
-use data_bucket::{align, SizeMeasurable, SizeMeasure};
+use data_bucket::{align, PersistTable, SizeMeasurable, SizeMeasure};
 use rkyv::{Archive, Serialize};
 
 #[derive(SizeMeasure, Archive, Serialize)]
@@ -26,4 +26,10 @@ struct MeasuredStruct {
 fn test_size_measure() {
     let measured_struct = MeasuredStruct {a: 3, b: 4};
     assert_eq!(measured_struct.aligned_size(), 8);
+}
+
+#[derive(PersistTable)]
+struct PersistedTable {
+    a: u32,
+    b: u32,
 }
