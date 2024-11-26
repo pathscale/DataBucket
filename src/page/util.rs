@@ -136,7 +136,7 @@ mod test {
 
     use crate::page::INNER_PAGE_SIZE;
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, PAGE_SIZE,
+        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, DATA_VERSION, PAGE_SIZE
     };
 
     #[test]
@@ -153,6 +153,7 @@ mod test {
 
         let res = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(&index);
         let mut header = GeneralHeader {
+            data_version: DATA_VERSION,
             space_id: 0.into(),
             page_id: 0.into(),
             previous_id: 0.into(),

@@ -7,11 +7,14 @@ use crate::space;
 use crate::util::Persistable;
 use crate::{page, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
+pub const DATA_VERSION: u32 = 1u32;
+
 /// Header that appears on every page before it's inner data.
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
 pub struct GeneralHeader {
+    pub data_version: u32,
     pub space_id: space::Id,
     pub page_id: page::PageId,
     pub previous_id: page::PageId,
@@ -23,6 +26,7 @@ pub struct GeneralHeader {
 impl GeneralHeader {
     pub fn new(page_id: page::PageId, type_: PageType, space_id: space::Id) -> Self {
         Self {
+            data_version: DATA_VERSION,
             page_id,
             previous_id: 0.into(),
             next_id: 0.into(),
@@ -38,6 +42,7 @@ impl GeneralHeader {
     pub fn follow(&mut self) -> Self {
         self.next_id = self.page_id.next();
         Self {
+            data_version: DATA_VERSION,
             page_id: self.next_id,
             previous_id: self.page_id,
             next_id: 0.into(),
@@ -53,6 +58,7 @@ impl GeneralHeader {
     pub fn follow_with(&mut self, page_type: PageType) -> Self {
         self.next_id = self.page_id.next();
         Self {
+            data_version: DATA_VERSION,
             page_id: self.next_id,
             previous_id: self.page_id,
             next_id: 0.into(),
@@ -71,12 +77,14 @@ impl Persistable for GeneralHeader {
 
 #[cfg(test)]
 mod test {
+    use crate::page::header::DATA_VERSION;
     use crate::util::Persistable;
     use crate::{GeneralHeader, PageType, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
     #[test]
     fn test_as_bytes() {
         let header = GeneralHeader {
+            data_version: DATA_VERSION,
             page_id: 1.into(),
             previous_id: 2.into(),
             next_id: 3.into(),
@@ -91,6 +99,7 @@ mod test {
     #[test]
     fn test_as_bytes_max() {
         let header = GeneralHeader {
+            data_version: DATA_VERSION,
             page_id: u32::MAX.into(),
             previous_id: (u32::MAX - 1).into(),
             next_id: (u32::MAX - 2).into(),
