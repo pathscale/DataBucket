@@ -136,7 +136,8 @@ mod test {
 
     use crate::page::INNER_PAGE_SIZE;
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType, DATA_VERSION, PAGE_SIZE
+        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType,
+        DATA_VERSION, PAGE_SIZE,
     };
 
     #[test]
