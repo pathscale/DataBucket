@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::{fs::{remove_file, File}, str};
 
-use data_bucket::{persist_page, GeneralHeader, GeneralPage, PageType, Persistable};
+use data_bucket::{persist_page, GeneralHeader, GeneralPage, PageType, DATA_VERSION};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -20,6 +20,7 @@ fn main() -> eyre::Result<()> {
 
     for page_id in 0..args.pages_count {
         let header: GeneralHeader = GeneralHeader {
+            data_version: DATA_VERSION,
             space_id: 1.into(),
             page_id: page_id.into(),
             previous_id: (if (page_id > 0) { page_id - 1} else {0}).into(),

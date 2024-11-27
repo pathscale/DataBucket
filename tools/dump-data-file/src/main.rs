@@ -1,7 +1,6 @@
 use clap::Parser;
-use std::{fs::File, str};
-
 use data_bucket::load_pages;
+use std::{fs::File, str};
 
 #[derive(Parser, Debug)]
 struct Args {

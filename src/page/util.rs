@@ -163,10 +163,10 @@ mod test {
 
     use scc::TreeIndex;
 
-    use crate::page::INNER_PAGE_SIZE;
-    use crate::{map_index_pages_to_general, map_unique_tree_index, GeneralHeader, GeneralPage, Link, PageType, PAGE_SIZE};
-
-    use super::{load_pages, persist_page};
+    use crate::page::{load_pages, INNER_PAGE_SIZE};
+    use crate::{
+        map_index_pages_to_general, map_unique_tree_index, persist_page, GeneralHeader, GeneralPage, Link, PageType, DATA_VERSION, PAGE_SIZE
+    };
 
     #[test]
     fn test_map() {
@@ -182,6 +182,7 @@ mod test {
 
         let res = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(&index);
         let mut header = GeneralHeader {
+            data_version: DATA_VERSION,
             space_id: 0.into(),
             page_id: 0.into(),
             previous_id: 0.into(),
@@ -216,6 +217,7 @@ mod test {
     #[test]
     fn test_persist_page() {
         let header: GeneralHeader = GeneralHeader {
+            data_version: DATA_VERSION,
             space_id: 1.into(),
             page_id: 2.into(),
             previous_id: 0.into(),
