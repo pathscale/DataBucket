@@ -23,7 +23,7 @@ fn main() -> eyre::Result<()> {
             data_version: DATA_VERSION,
             space_id: 1.into(),
             page_id: page_id.into(),
-            previous_id: (if (page_id > 0) { page_id - 1} else {0}).into(),
+            previous_id: (if page_id > 0 { page_id - 1} else {0}).into(),
             next_id: (page_id + 1).into(),
             page_type: PageType::SpaceInfo,
             data_length: 0 as u32,
