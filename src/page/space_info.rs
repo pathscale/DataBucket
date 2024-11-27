@@ -12,7 +12,7 @@ use super::PrimaryKeyGeneratorState;
 
 pub type SpaceName = String;
 
-// TODO: Minor. Add some schema description in `SpaceIndo`
+// TODO: Minor. Add some schema description in `SpaceInfo`
 
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
