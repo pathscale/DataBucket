@@ -9,7 +9,7 @@ use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub use data::Data;
-pub use header::GeneralHeader;
+pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
@@ -29,6 +29,7 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 ///
 /// Length of the values are:
 ///
+/// * `data_version` - 4 bytes,
 /// * `page_id` - 4 bytes,
 /// * `previous_id` - 4 bytes,
 /// * `next_id` - 4 bytes,
@@ -37,7 +38,7 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 /// * `data_length` - 4 bytes,
 ///
 /// **2 bytes are added by rkyv implicitly.**
-pub const GENERAL_HEADER_SIZE: usize = 24;
+pub const GENERAL_HEADER_SIZE: usize = 28;
 
 /// Length of the inner part of [`General`] page. It's counted as [`PAGE_SIZE`]
 /// without [`General`] page [`GENERAL_HEADER_SIZE`].
@@ -85,11 +86,12 @@ pub struct General<Inner> {
 #[cfg(test)]
 mod tests {
     use crate::page::ty::PageType;
-    use crate::page::{GeneralHeader, GENERAL_HEADER_SIZE};
+    use crate::page::{GeneralHeader, DATA_VERSION, GENERAL_HEADER_SIZE};
     use crate::PAGE_SIZE;
 
     fn get_general_header() -> GeneralHeader {
         GeneralHeader {
+            data_version: DATA_VERSION,
             page_id: 1.into(),
             previous_id: 2.into(),
             next_id: 4.into(),
