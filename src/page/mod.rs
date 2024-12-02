@@ -1,4 +1,5 @@
 mod data;
+mod data_type;
 mod header;
 mod index;
 mod space_info;
@@ -17,6 +18,7 @@ pub use util::{
     map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page, parse_page,
     persist_page,
 };
+pub use data_type::DataType;
 
 // TODO: Move to config
 /// The size of a page. Header size and other parts are _included_ in this size.
