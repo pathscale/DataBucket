@@ -1,5 +1,5 @@
-use rkyv::Deserialize;
-use std::io;
+use rkyv::{Archive, Deserialize, Fallible, Serialize};
+use std::{arch, io};
 use std::io::prelude::*;
 
 use crate::page::header::GeneralHeader;
@@ -76,7 +76,7 @@ where
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, rkyv::de::deserializers::SharedDeserializeMap>,
 {
-    let current_position = file.stream_position()?;
+    let current_position: u64 = file.stream_position()?;
     let start_pos = index as i64 * PAGE_SIZE as i64;
     file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
 
@@ -127,6 +127,36 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
     Ok(GeneralPage {
         header,
         inner: data,
+    })
+}
+
+pub fn parse_index_page<T, const PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index: u32,
+) -> eyre::Result<GeneralPage<IndexData<T>>>
+where T: Archive,
+    <T as rkyv::Archive>::Archived:
+    rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
+{
+    let current_position: u64 = file.stream_position()?;
+    let start_pos = index as i64 * PAGE_SIZE as i64;
+    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
+
+    let mut buffer = [0; GENERAL_HEADER_SIZE];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let header: GeneralHeader = archived.deserialize(&mut map)?;
+
+    let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
+    file.read_exact(&mut buffer)?;
+    let archived= unsafe { rkyv::archived_root::<IndexData<T>>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let index: IndexData<T> = archived.deserialize(&mut map)?;
+
+    Ok(GeneralPage {
+        header,
+        inner: index
     })
 }
 

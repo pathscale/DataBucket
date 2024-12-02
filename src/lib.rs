@@ -9,7 +9,7 @@ pub use link::Link;
 pub use data_bucket_codegen::SizeMeasure;
 pub use page::{
     map_data_pages_to_general, map_index_pages_to_general, map_tree_index, map_unique_tree_index,
-    parse_data_page, parse_page, persist_page, Data as DataPage, General as GeneralPage,
+    parse_data_page, parse_index_page, parse_page, persist_page, Data as DataPage, General as GeneralPage,
     GeneralHeader, IndexPage as IndexData, Interval, PageType, SpaceInfo as SpaceInfoData,
     DATA_VERSION, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
 };
