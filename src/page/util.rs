@@ -1,3 +1,4 @@
+use eyre::{eyre, OptionExt};
 use rkyv::{Archive, Deserialize, Fallible, Serialize};
 use std::{arch, io};
 use std::io::prelude::*;
@@ -5,7 +6,9 @@ use std::io::prelude::*;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{space, DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+
+use super::{Interval, SpaceInfo};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -158,6 +161,67 @@ where T: Archive,
         header,
         inner: index
     })
+}
+
+pub fn parse_space_info<const PAGE_SIZE: usize>(
+    file: &mut std::fs::File
+) -> eyre::Result<SpaceInfo>
+{
+    file.seek(io::SeekFrom::Start(0))?;
+
+    let mut buffer = [0; GENERAL_HEADER_SIZE];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let header: GeneralHeader = archived.deserialize(&mut map)?;
+
+    let mut buffer = vec![0u8; header.data_length as usize];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<SpaceInfo>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let space_info: SpaceInfo = archived.deserialize(&mut map)?;
+
+    Ok(space_info)
+}
+
+pub fn read_index_pages<T, const PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index_name: String,
+    intervals: Vec<Interval>
+) -> eyre::Result<Vec<IndexData<T>>>
+where T: Archive,
+<T as rkyv::Archive>::Archived:
+rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
+{
+    let space_info = parse_space_info::<PAGE_SIZE>(file)?;
+
+    let space_info_intervals = space_info.secondary_index_intervals
+        .get(&index_name)
+        .ok_or_else(|| eyre!("No index with name \"{}\" found", index_name))?;
+
+    // check that all of the provided intervals are valid
+    for interval in intervals.iter() {
+        let mut contained = false;
+        for space_info_interval in space_info_intervals.iter() {
+            if space_info_interval.contains(interval) {
+                contained = true;
+                break;
+            }
+        }
+        if !contained {
+            return Err(eyre!("The index interval {:?} is not valid", interval));
+        }
+    }
+
+    let mut result: Vec<IndexData<T>> = vec![];
+    for interval in intervals.iter() {
+        for index in interval.0..interval.1 {
+            let index_page = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
+            result.push(index_page.inner);
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

@@ -32,6 +32,12 @@ pub struct SpaceInfo<Pk = ()> {
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Interval(pub usize, pub usize);
 
+impl Interval {
+    pub fn contains(&self, interval: &Interval) -> bool {
+        self.0 <= interval.0 && self.1 >= interval.1
+    }
+}
+
 impl<Pk> Persistable for SpaceInfo<Pk>
 where
     Pk: Archive + Serialize<AllocSerializer<{ INNER_PAGE_SIZE }>>,
