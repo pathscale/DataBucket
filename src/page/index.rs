@@ -36,7 +36,7 @@ pub struct IndexPage<T> {
 }
 
 // Manual `Default` implementation to avoid `T: Default`
-impl<'a, T> Default for IndexPage<T> {
+impl<T> Default for IndexPage<T> {
     fn default() -> Self {
         Self {
             index_values: vec![],
