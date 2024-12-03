@@ -285,13 +285,7 @@ mod test {
         assert_eq!(third.page_type, PageType::Index);
     }
 
-    #[test]
-    fn test_read_index_pages() {
-        let filename = "tests/data/table.wt";
-        let _ = remove_file(filename).unwrap();
-        let mut file = std::fs::File::create(filename).unwrap();
-
-        // create the space page
+    fn create_space_with_intervals(intervals: &Vec<Interval>) -> GeneralPage<SpaceInfoData> {
         let space_info_header = GeneralHeader {
             data_version: DATA_VERSION,
             space_id: 1.into(),
@@ -307,7 +301,7 @@ mod test {
             name: "Test".to_string(),
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::from([
-                ("string_index".to_owned(), vec![Interval(1, 2)])
+                ("string_index".to_owned(), intervals.clone())
             ]),
             data_intervals: vec![],
             pk_gen_state: (),
@@ -316,38 +310,67 @@ mod test {
                 ("string_index".to_owned(), DataType::String),
             ])
         };
-        let mut space_info_page = GeneralPage {
+        let space_info_page = GeneralPage {
             header: space_info_header,
             inner: space_info,
         };
+
+        space_info_page
+    }
+
+    fn create_index_pages(intervals: &Vec<Interval>) -> Vec<GeneralPage<IndexData<String>>> {
+        let mut index_pages = Vec::<GeneralPage<IndexData<String>>>::new();
+
+        for interval in intervals {
+            for index in interval.0..interval.1 {
+                let index_header = GeneralHeader {
+                    data_version: DATA_VERSION,
+                    space_id: 1.into(),
+                    page_id: (index as u32).into(),
+                    previous_id: (if index > 0 { index as u32 - 1 } else { 0 }).into(),
+                    next_id: (index as u32 + 1).into(),
+                    page_type: PageType::SpaceInfo,
+                    data_length: 0u32,
+                };
+                let index_data = IndexData {
+                    index_values: vec![
+                        IndexValue {
+                            key: "first_value".to_string(),
+                            link: Link {
+                                page_id: 2.into(),
+                                length: 0,
+                                offset: 0
+                            }
+                        }
+                    ]
+                };
+                let index_page = GeneralPage {
+                    header: index_header,
+                    inner: index_data,
+                };
+                index_pages.push(index_page);
+            }
+        }
+
+        index_pages
+    }
+
+    #[test]
+    fn test_read_index_pages() {
+        let filename = "tests/data/table.wt";
+        let _ = remove_file(filename).unwrap();
+        let mut file = std::fs::File::create(filename).unwrap();
+
+        let intervals = vec![Interval(1, 3)];
+
+        // create the space page
+        let mut space_info_page = create_space_with_intervals(&intervals);
         persist_page(&mut space_info_page, &mut file).unwrap();
-        // persist the index page
-        let index_header = GeneralHeader {
-            data_version: DATA_VERSION,
-            space_id: 1.into(),
-            page_id: 1.into(),
-            previous_id: 0.into(),
-            next_id: 2.into(),
-            page_type: PageType::SpaceInfo,
-            data_length: 0u32,
-        };
-        let index_data = IndexData {
-            index_values: vec![
-                IndexValue {
-                    key: "first_value".to_string(),
-                    link: Link {
-                        page_id: 2.into(),
-                        length: 0,
-                        offset: 0
-                    }
-                }
-            ]
-        };
-        let mut index_page = GeneralPage {
-            header: index_header,
-            inner: index_data,
-        };
-        persist_page(&mut index_page, &mut file).unwrap();
+
+        // create the index pages
+        for mut index_page in create_index_pages(&intervals) {
+            persist_page(&mut index_page, &mut file).unwrap();
+        }
 
         // read the data
         let mut file = std::fs::File::open(filename).unwrap();
