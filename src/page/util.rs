@@ -361,7 +361,7 @@ mod test {
         let _ = remove_file(filename).unwrap();
         let mut file = std::fs::File::create(filename).unwrap();
 
-        let intervals = vec![Interval(1, 3)];
+        let intervals = vec![Interval(1, 3), Interval(5, 8)];
 
         // create the space page
         let mut space_info_page = create_space_with_intervals(&intervals);
