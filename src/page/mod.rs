@@ -10,15 +10,15 @@ use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub use data::Data;
+pub use data_type::DataType;
 pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
-    map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page, parse_page,
-    persist_page, read_index_pages,
+    map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
+    parse_page, persist_page, read_index_pages,
 };
-pub use data_type::DataType;
 
 // TODO: Move to config
 /// The size of a page. Header size and other parts are _included_ in this size.

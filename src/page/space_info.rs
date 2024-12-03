@@ -6,8 +6,8 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::INNER_PAGE_SIZE;
 use crate::util::Persistable;
-use crate::{space, Link};
 use crate::DataType;
+use crate::{space, Link};
 
 pub type SpaceName = String;
 
