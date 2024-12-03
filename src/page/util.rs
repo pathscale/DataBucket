@@ -186,7 +186,7 @@ pub fn parse_space_info<const PAGE_SIZE: usize>(
 
 pub fn read_index_pages<T, const PAGE_SIZE: usize>(
     file: &mut std::fs::File,
-    index_name: String,
+    index_name: &str,
     intervals: Vec<Interval>
 ) -> eyre::Result<Vec<IndexData<T>>>
 where T: Archive,
@@ -196,7 +196,7 @@ rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
 
     let space_info_intervals = space_info.secondary_index_intervals
-        .get(&index_name)
+        .get(index_name)
         .ok_or_else(|| eyre!("No index with name \"{}\" found", index_name))?;
 
     // check that all of the provided intervals are valid
@@ -226,13 +226,18 @@ rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+    use std::fs::remove_file;
+
     use scc::TreeIndex;
 
-    use crate::page::INNER_PAGE_SIZE;
+    use crate::page::index::{self, IndexValue};
+    use crate::page::{header, INNER_PAGE_SIZE};
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, Link, PageType,
-        DATA_VERSION, PAGE_SIZE,
+        map_index_pages_to_general, map_unique_tree_index, space, DataType, GeneralHeader, GeneralPage, IndexData, Interval, Link, PageType, SpaceInfoData, DATA_VERSION, PAGE_SIZE
     };
+
+    use super::{persist_page, read_index_pages};
 
     #[test]
     fn test_map() {
@@ -278,5 +283,81 @@ mod test {
         assert_eq!(third.space_id, header.space_id);
         assert_eq!(third.previous_id, second.page_id);
         assert_eq!(third.page_type, PageType::Index);
+    }
+
+    #[test]
+    fn test_read_index_pages() {
+        let filename = "tests/data/table.wt";
+        let _ = remove_file(filename).unwrap();
+        let mut file = std::fs::File::create(filename).unwrap();
+
+        // create the space page
+        let space_info_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 0.into(),
+            previous_id: 0.into(),
+            next_id: 1.into(),
+            page_type: PageType::SpaceInfo,
+            data_length: 0u32,
+        };
+        let space_info = SpaceInfoData {
+            id: 0.into(),
+            page_count: 0,
+            name: "Test".to_string(),
+            primary_key_intervals: vec![],
+            secondary_index_intervals: HashMap::from([
+                ("string_index".to_owned(), vec![Interval(1, 2)])
+            ]),
+            data_intervals: vec![],
+            pk_gen_state: (),
+            empty_links_list: vec![],
+            secondary_index_map: HashMap::from([
+                ("string_index".to_owned(), DataType::String),
+            ])
+        };
+        let mut space_info_page = GeneralPage {
+            header: space_info_header,
+            inner: space_info,
+        };
+        persist_page(&mut space_info_page, &mut file).unwrap();
+        // persist the index page
+        let index_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 1.into(),
+            previous_id: 0.into(),
+            next_id: 2.into(),
+            page_type: PageType::SpaceInfo,
+            data_length: 0u32,
+        };
+        let index_data = IndexData {
+            index_values: vec![
+                IndexValue {
+                    key: "first_value".to_string(),
+                    link: Link {
+                        page_id: 2.into(),
+                        length: 0,
+                        offset: 0
+                    }
+                }
+            ]
+        };
+        let mut index_page = GeneralPage {
+            header: index_header,
+            inner: index_data,
+        };
+        persist_page(&mut index_page, &mut file).unwrap();
+
+        // read the data
+        let mut file = std::fs::File::open(filename).unwrap();
+        let index_pages = read_index_pages::<String, PAGE_SIZE>(&mut file, "string_index", vec![
+            Interval(1, 2),
+        ]).unwrap();
+        assert_eq!(index_pages[0].index_values.len(), 1);
+        assert_eq!(index_pages[0].index_values[0].key, "first_value");
+        assert_eq!(index_pages[0].index_values[0].link.page_id, 2.into());
+        assert_eq!(index_pages[0].index_values[0].link.offset, 0);
+        assert_eq!(index_pages[0].index_values[0].link.length, 0);
     }
 }
