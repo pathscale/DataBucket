@@ -2,6 +2,7 @@ mod data;
 mod data_type;
 mod header;
 mod index;
+mod primary_key;
 mod space_info;
 mod ty;
 mod util;
@@ -13,6 +14,7 @@ pub use data::Data;
 pub use data_type::DataType;
 pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
+pub use primary_key::{TablePrimaryKey, PrimaryKeyGenerator, PrimaryKeyGeneratorState};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
