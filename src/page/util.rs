@@ -8,10 +8,6 @@ use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
 use crate::{DataPage, GeneralPage, IndexData, Persistable, SpaceInfoData, GENERAL_HEADER_SIZE, PAGE_SIZE};
-use std::io;
-use std::io::prelude::*;
-
-use super::header;
 
 use super::{Interval, SpaceInfo};
 
