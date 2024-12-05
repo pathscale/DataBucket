@@ -219,6 +219,29 @@ where
     Ok(result)
 }
 
+pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<u8>>>>
+{
+    let mut pages: Vec<GeneralPage<Vec<u8>>> = vec![];
+
+    loop {
+        let mut header_buf: [u8; GENERAL_HEADER_SIZE] = [0u8; GENERAL_HEADER_SIZE];
+        file.read_exact(&mut header_buf)?;
+        let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
+
+        let mut inner_buf = vec![0u8; header.data_length as usize];
+        file.read_exact(&mut inner_buf)?;
+
+        pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
+        let pos = file.seek(std::io::SeekFrom::Current(
+            PAGE_SIZE as i64 - GENERAL_HEADER_SIZE as i64 - header.data_length as i64))?;
+        if pos >= file.metadata().unwrap().len() {
+            break;
+        }
+    }
+
+    Ok(pages)
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
