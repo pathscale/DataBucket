@@ -1,5 +1,7 @@
-use std::io::{Read, Seek};
+use std::io;
+use std::io::prelude::*;
 
+use eyre::eyre;
 use rkyv::{Archive, Deserialize};
 
 use crate::page::header::GeneralHeader;
@@ -10,6 +12,8 @@ use std::io;
 use std::io::prelude::*;
 
 use super::header;
+
+use super::{Interval, SpaceInfo};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -71,6 +75,24 @@ where
     Ok(())
 }
 
+fn seek_to_page_start(file: &mut std::fs::File, index: u32) -> eyre::Result<()> {
+    let current_position: u64 = file.stream_position()?;
+    let start_pos = index as i64 * PAGE_SIZE as i64;
+    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
+
+    Ok(())
+}
+
+fn parse_general_header(file: &mut std::fs::File) -> eyre::Result<GeneralHeader> {
+    let mut buffer = [0; GENERAL_HEADER_SIZE];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let header: GeneralHeader = archived.deserialize(&mut map)?;
+
+    Ok(header)
+}
+
 pub fn parse_page<Page, const PAGE_SIZE: u32>(
     file: &mut std::fs::File,
     index: u32,
@@ -80,15 +102,8 @@ where
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, rkyv::de::deserializers::SharedDeserializeMap>,
 {
-    let current_position = file.stream_position()?;
-    let start_pos = index as i64 * PAGE_SIZE as i64;
-    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
-
-    let mut buffer = [0; GENERAL_HEADER_SIZE];
-    file.read_exact(&mut buffer)?;
-    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
-    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
-    let header: GeneralHeader = archived.deserialize(&mut map)?;
+    seek_to_page_start(file, index)?;
+    let header = parse_general_header(file)?;
 
     let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer)?;
@@ -106,15 +121,8 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
     file: &mut std::fs::File,
     index: u32,
 ) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
-    let current_position = file.stream_position()?;
-    let start_pos = index as i64 * PAGE_SIZE as i64;
-    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
-
-    let mut buffer = [0; GENERAL_HEADER_SIZE];
-    file.read_exact(&mut buffer)?;
-    let archived = unsafe { rkyv::archived_root::<GeneralHeader>(&buffer[..]) };
-    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
-    let header: GeneralHeader = archived.deserialize(&mut map)?;
+    seek_to_page_start(file, index)?;
+    let header = parse_general_header(file)?;
 
     let mut buffer = [0u8; INNER_PAGE_SIZE];
     if header.next_id == 0.into() {
@@ -134,39 +142,102 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
     })
 }
 
-pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<u8>>>>
+pub fn parse_index_page<T, const PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index: u32,
+) -> eyre::Result<GeneralPage<IndexData<T>>>
+where
+    T: Archive,
+    <T as rkyv::Archive>::Archived:
+        rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
 {
-    let mut pages: Vec<GeneralPage<Vec<u8>>> = vec![];
+    seek_to_page_start(file, index)?;
+    let header = parse_general_header(file)?;
 
-    loop {
-        let mut header_buf: [u8; GENERAL_HEADER_SIZE] = [0u8; GENERAL_HEADER_SIZE];
-        file.read_exact(&mut header_buf)?;
-        let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
+    let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<IndexData<T>>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let index: IndexData<T> = archived.deserialize(&mut map)?;
 
-        let mut inner_buf = vec![0u8; header.data_length as usize];
-        file.read_exact(&mut inner_buf)?;
+    Ok(GeneralPage {
+        header,
+        inner: index,
+    })
+}
 
-        pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
-        let pos = file.seek(std::io::SeekFrom::Current(
-            PAGE_SIZE as i64 - GENERAL_HEADER_SIZE as i64 - header.data_length as i64))?;
-        if pos >= file.metadata().unwrap().len() {
-            break;
+pub fn parse_space_info<const PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+) -> eyre::Result<SpaceInfo> {
+    file.seek(io::SeekFrom::Start(0))?;
+    let header = parse_general_header(file)?;
+
+    let mut buffer = vec![0u8; header.data_length as usize];
+    file.read_exact(&mut buffer)?;
+    let archived = unsafe { rkyv::archived_root::<SpaceInfo>(&buffer[..]) };
+    let mut map = rkyv::de::deserializers::SharedDeserializeMap::new();
+    let space_info: SpaceInfo = archived.deserialize(&mut map)?;
+
+    Ok(space_info)
+}
+
+pub fn read_index_pages<T, const PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index_name: &str,
+    intervals: Vec<Interval>,
+) -> eyre::Result<Vec<IndexData<T>>>
+where
+    T: Archive,
+    <T as rkyv::Archive>::Archived:
+        rkyv::Deserialize<T, rkyv::de::deserializers::SharedDeserializeMap>,
+{
+    let space_info = parse_space_info::<PAGE_SIZE>(file)?;
+
+    let space_info_intervals = space_info
+        .secondary_index_intervals
+        .get(index_name)
+        .ok_or_else(|| eyre!("No index with name \"{}\" found", index_name))?;
+
+    // check that all of the provided intervals are valid
+    for interval in intervals.iter() {
+        let mut contained = false;
+        for space_info_interval in space_info_intervals.iter() {
+            if space_info_interval.contains(interval) {
+                contained = true;
+                break;
+            }
+        }
+        if !contained {
+            return Err(eyre!("The index interval {:?} is not valid", interval));
         }
     }
 
-    Ok(pages)
+    let mut result: Vec<IndexData<T>> = vec![];
+    for interval in intervals.iter() {
+        for index in interval.0..interval.1 {
+            let index_page = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
+            result.push(index_page.inner);
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]
 mod test {
-    use std::fs::{remove_file, File};
-
+    use std::collections::HashMap;
+    use std::fs::remove_file;
+    use std::path::Path;
     use scc::TreeIndex;
 
-    use crate::page::{load_pages, INNER_PAGE_SIZE};
+    use crate::page::index::IndexValue;
+    use crate::page::INNER_PAGE_SIZE;
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, persist_page, GeneralHeader, GeneralPage, Link, PageType, DATA_VERSION, PAGE_SIZE
+        map_index_pages_to_general, map_unique_tree_index, DataType, GeneralHeader, GeneralPage,
+        IndexData, Interval, Link, PageType, SpaceInfoData, DATA_VERSION, PAGE_SIZE,
     };
+
+    use super::{persist_page, read_index_pages};
 
     #[test]
     fn test_map() {
@@ -214,28 +285,101 @@ mod test {
         assert_eq!(third.page_type, PageType::Index);
     }
 
-    #[test]
-    fn test_persist_page() {
-        let header: GeneralHeader = GeneralHeader {
+    fn create_space_with_intervals(intervals: &Vec<Interval>) -> GeneralPage<SpaceInfoData> {
+        let space_info_header = GeneralHeader {
             data_version: DATA_VERSION,
             space_id: 1.into(),
-            page_id: 2.into(),
+            page_id: 0.into(),
             previous_id: 0.into(),
-            next_id: 0.into(),
+            next_id: 1.into(),
             page_type: PageType::SpaceInfo,
-            data_length: 0 as u32,
+            data_length: 0u32,
         };
-        let inner: String = "hello".into();
-        let mut page: GeneralPage<String> = GeneralPage { header, inner };
+        let space_info = SpaceInfoData {
+            id: 0.into(),
+            page_count: 0,
+            name: "Test".to_string(),
+            primary_key_intervals: vec![],
+            secondary_index_intervals: HashMap::from([(
+                "string_index".to_owned(),
+                intervals.clone(),
+            )]),
+            data_intervals: vec![],
+            pk_gen_state: (),
+            empty_links_list: vec![],
+            secondary_index_map: HashMap::from([("string_index".to_owned(), DataType::String)]),
+        };
+        let space_info_page = GeneralPage {
+            header: space_info_header,
+            inner: space_info,
+        };
 
-        let filename = mktemp::Temp::new_path();
-        _ = remove_file(&filename);
-        let mut output_file = File::create(&filename).unwrap();
-        persist_page(&mut page, &mut output_file).unwrap();
+        space_info_page
+    }
 
-        let mut input_file = File::open(&filename).unwrap();
-        let pages = load_pages(&mut input_file).unwrap();
-        assert_eq!(pages[0].header, page.header);
-        assert_eq!(pages[0].inner, page.inner.as_bytes());
+    fn create_index_pages(intervals: &Vec<Interval>) -> Vec<GeneralPage<IndexData<String>>> {
+        let mut index_pages = Vec::<GeneralPage<IndexData<String>>>::new();
+
+        for interval in intervals {
+            for index in interval.0..interval.1 {
+                let index_header = GeneralHeader {
+                    data_version: DATA_VERSION,
+                    space_id: 1.into(),
+                    page_id: (index as u32).into(),
+                    previous_id: (if index > 0 { index as u32 - 1 } else { 0 }).into(),
+                    next_id: (index as u32 + 1).into(),
+                    page_type: PageType::SpaceInfo,
+                    data_length: 0u32,
+                };
+                let index_data = IndexData {
+                    index_values: vec![IndexValue {
+                        key: "first_value".to_string(),
+                        link: Link {
+                            page_id: 2.into(),
+                            length: 0,
+                            offset: 0,
+                        },
+                    }],
+                };
+                let index_page = GeneralPage {
+                    header: index_header,
+                    inner: index_data,
+                };
+                index_pages.push(index_page);
+            }
+        }
+
+        index_pages
+    }
+
+    #[test]
+    fn test_read_index_pages() {
+        let filename = "tests/data/table.wt";
+        if Path::new(filename).exists() {
+            remove_file(filename).unwrap();
+        }
+        let mut file = std::fs::File::create(filename).unwrap();
+
+        let intervals = vec![Interval(1, 3), Interval(5, 8)];
+
+        // create the space page
+        let mut space_info_page = create_space_with_intervals(&intervals);
+        persist_page(&mut space_info_page, &mut file).unwrap();
+
+        // create the index pages
+        for mut index_page in create_index_pages(&intervals) {
+            persist_page(&mut index_page, &mut file).unwrap();
+        }
+
+        // read the data
+        let mut file = std::fs::File::open(filename).unwrap();
+        let index_pages =
+            read_index_pages::<String, PAGE_SIZE>(&mut file, "string_index", vec![Interval(1, 2)])
+                .unwrap();
+        assert_eq!(index_pages[0].index_values.len(), 1);
+        assert_eq!(index_pages[0].index_values[0].key, "first_value");
+        assert_eq!(index_pages[0].index_values[0].link.page_id, 2.into());
+        assert_eq!(index_pages[0].index_values[0].link.offset, 0);
+        assert_eq!(index_pages[0].index_values[0].link.length, 0);
     }
 }
