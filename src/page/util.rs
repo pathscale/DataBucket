@@ -295,6 +295,7 @@ mod test {
             id: 0.into(),
             page_count: 0,
             name: "Test".to_string(),
+            row_schema: vec![],
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::from([(
                 "string_index".to_owned(),
