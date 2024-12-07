@@ -57,6 +57,8 @@ where
 {
     use std::io::prelude::*;
 
+    seek_to_page_start(file, page.header.page_id.0)?;
+
     let page_count = page.header.page_id.0 as i64 + 1;
     let inner_bytes = page.inner.as_bytes();
     page.header.data_length = inner_bytes.as_ref().len() as u32;
@@ -370,7 +372,9 @@ mod test {
         // read the data
         let mut file = std::fs::File::open(filename).unwrap();
         let index_pages =
-            read_index_pages::<String, PAGE_SIZE>(&mut file, "string_index", vec![Interval(1, 2)])
+            read_index_pages::<String, PAGE_SIZE>(&mut file, "string_index", vec![
+                Interval(1, 2), Interval(5, 6)
+                ])
                 .unwrap();
         assert_eq!(index_pages[0].index_values.len(), 1);
         assert_eq!(index_pages[0].index_values[0].key, "first_value");
