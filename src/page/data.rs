@@ -1,6 +1,7 @@
+use eyre::{eyre, Result};
+
 use crate::Persistable;
 use crate::Link;
-use eyre::{eyre, Result};
 
 #[derive(Debug)]
 pub struct Data<const DATA_LENGTH: usize> {
