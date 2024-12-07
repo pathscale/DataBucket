@@ -57,7 +57,7 @@ where
 {
     use std::io::prelude::*;
 
-    file.seek(io::SeekFrom::Start(page.header.page_id.0 as u64 * PAGE_SIZE as u64))?;
+    seek_to_page_start(file, page.header.page_id.0)?;
 
     let page_count = page.header.page_id.0 as i64 + 1;
     let inner_bytes = page.inner.as_bytes();
