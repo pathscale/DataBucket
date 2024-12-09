@@ -43,6 +43,19 @@ impl SizeMeasurable for Uuid {
     }
 }
 
+impl SizeMeasurable for [u8; 32] {
+    fn aligned_size(&self) -> usize {
+        mem::size_of::<[u8; 32]>()
+    }
+}
+
+impl SizeMeasurable for [u8; 20] {
+    fn aligned_size(&self) -> usize {
+        mem::size_of::<[u8; 20]>()
+    }
+}
+
+
 // That was found on practice... Check unit test for proofs that works.
 impl SizeMeasurable for String {
     fn aligned_size(&self) -> usize {
