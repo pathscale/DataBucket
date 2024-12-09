@@ -1,5 +1,4 @@
 mod data;
-mod data_type;
 mod header;
 mod index;
 mod space_info;
@@ -10,7 +9,6 @@ use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub use data::Data;
-pub use data_type::DataType;
 pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::{Interval, SpaceInfo};

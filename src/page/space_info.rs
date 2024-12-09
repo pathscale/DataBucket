@@ -6,7 +6,6 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::INNER_PAGE_SIZE;
 use crate::util::Persistable;
-use crate::DataType;
 use crate::{space, Link};
 
 pub type SpaceName = String;
@@ -20,12 +19,13 @@ pub struct SpaceInfo<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
     pub name: SpaceName,
+    pub row_schema: Vec<(String, String)>,
     pub primary_key_intervals: Vec<Interval>,
     pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
     pub data_intervals: Vec<Interval>,
     pub pk_gen_state: Pk,
     pub empty_links_list: Vec<Link>,
-    pub secondary_index_map: HashMap<String, DataType>,
+    pub secondary_index_map: HashMap<String, String>,
 }
 
 /// Represents some interval between values.
@@ -60,6 +60,7 @@ mod test {
             id: 0.into(),
             page_count: 0,
             name: "Test".to_string(),
+            row_schema: vec![],
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::new(),
             data_intervals: vec![],
