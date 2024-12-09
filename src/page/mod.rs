@@ -53,6 +53,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     Clone,
     Deserialize,
     Debug,
+    Default,
     Display,
     Eq,
     From,
