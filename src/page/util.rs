@@ -3,11 +3,12 @@ use std::io::prelude::*;
 
 use eyre::eyre;
 use rkyv::{Archive, Deserialize};
+use scc::HashMap;
 
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{space, DataPage, DataType, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 use super::{Interval, SpaceInfo};
 
@@ -217,6 +218,36 @@ where
     }
 
     Ok(result)
+}
+
+fn parse_row(data_page: )
+
+fn read_data_pages_from_space<const PAGE_SIZE: usize>(file: &mut std::fs::File) -> eyre::Result<Vec<HashMap<String, String>>> {
+    let space_info = parse_space_info::<PAGE_SIZE>(file)?;
+    let mut result: Vec<HashMap<String, String>> = vec![];
+    for interval in space_info.data_intervals.iter() {
+        for index in interval.0 .. interval.1 {
+            let data_page = parse_data_page(file, index)?;
+
+            file.seek(io::SeekFrom::Start(PAGE_SIZE * index))?;
+            for column in space_info.row_schema {
+                let value = match column.1 {
+                    DataType::String => {
+                        todo!()
+                    },
+                    DataType::Integer => {
+                        todo!()
+                    },
+                    DataType::Float => {
+                        todo!()
+                    }
+                };
+            }
+
+            let row: HashMap<String, String> = parse_binary_row(&data_page, &row_schema);
+        }
+    }
+    todo!()
 }
 
 #[cfg(test)]
