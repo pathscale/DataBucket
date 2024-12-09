@@ -8,7 +8,7 @@ use scc::HashMap;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{space, DataPage, DataType, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{space, DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 use super::{Interval, SpaceInfo};
 
@@ -220,35 +220,33 @@ where
     Ok(result)
 }
 
-fn parse_row(data_page: )
+// fn read_data_pages_from_space<const PAGE_SIZE: usize>(file: &mut std::fs::File) -> eyre::Result<Vec<HashMap<String, String>>> {
+//     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
+//     let mut result: Vec<HashMap<String, String>> = vec![];
+//     for interval in space_info.data_intervals.iter() {
+//         for index in interval.0 .. interval.1 {
+//             let data_page = parse_data_page(file, index)?;
 
-fn read_data_pages_from_space<const PAGE_SIZE: usize>(file: &mut std::fs::File) -> eyre::Result<Vec<HashMap<String, String>>> {
-    let space_info = parse_space_info::<PAGE_SIZE>(file)?;
-    let mut result: Vec<HashMap<String, String>> = vec![];
-    for interval in space_info.data_intervals.iter() {
-        for index in interval.0 .. interval.1 {
-            let data_page = parse_data_page(file, index)?;
+//             file.seek(io::SeekFrom::Start(PAGE_SIZE * index))?;
+//             for column in space_info.row_schema {
+//                 let value = match column.1 {
+//                     DataType::String => {
+//                         rkyv::from_bytes_unchecked(bytes)
+//                     },
+//                     DataType::Integer => {
+//                         todo!()
+//                     },
+//                     DataType::Float => {
+//                         todo!()
+//                     }
+//                 };
+//             }
 
-            file.seek(io::SeekFrom::Start(PAGE_SIZE * index))?;
-            for column in space_info.row_schema {
-                let value = match column.1 {
-                    DataType::String => {
-                        todo!()
-                    },
-                    DataType::Integer => {
-                        todo!()
-                    },
-                    DataType::Float => {
-                        todo!()
-                    }
-                };
-            }
-
-            let row: HashMap<String, String> = parse_binary_row(&data_page, &row_schema);
-        }
-    }
-    todo!()
-}
+//             let row: HashMap<String, String> = parse_binary_row(&data_page, &row_schema);
+//         }
+//     }
+//     todo!()
+// }
 
 #[cfg(test)]
 mod test {
@@ -260,7 +258,7 @@ mod test {
     use crate::page::index::IndexValue;
     use crate::page::INNER_PAGE_SIZE;
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, DataType, GeneralHeader, GeneralPage,
+        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, GeneralPage,
         IndexData, Interval, Link, PageType, SpaceInfoData, DATA_VERSION, PAGE_SIZE,
     };
 
@@ -335,7 +333,7 @@ mod test {
             data_intervals: vec![],
             pk_gen_state: (),
             empty_links_list: vec![],
-            secondary_index_map: HashMap::from([("string_index".to_owned(), DataType::String)]),
+            secondary_index_map: HashMap::from([("string_index".to_string(), "String".to_string())]),
         };
         let space_info_page = GeneralPage {
             header: space_info_header,
