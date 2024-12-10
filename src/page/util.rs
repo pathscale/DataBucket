@@ -226,6 +226,7 @@ mod test {
     use std::collections::HashMap;
     use std::fs::remove_file;
     use std::path::Path;
+    use scc::ebr::Guard;
     use scc::TreeIndex;
 
     use crate::page::index::IndexValue;
@@ -249,7 +250,8 @@ mod test {
             index.insert(i, l).expect("is ok");
         }
 
-        let res = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let res = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(index.iter(&guard));
         let mut header = GeneralHeader {
             data_version: DATA_VERSION,
             space_id: 0.into(),
