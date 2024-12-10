@@ -333,7 +333,7 @@ mod test {
             data_intervals: vec![],
             pk_gen_state: (),
             empty_links_list: vec![],
-            secondary_index_map: HashMap::from([("string_index".to_string(), "String".to_string())]),
+            secondary_index_types: vec![("string_index".to_string(), "String".to_string())],
         };
         let space_info_page = GeneralPage {
             header: space_info_header,
