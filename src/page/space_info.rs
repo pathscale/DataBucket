@@ -1,58 +1,55 @@
 //! [`SpaceInfo`] declaration.
 use std::collections::HashMap;
 
-use rkyv::{Archive, Deserialize, Serialize};
-
-use crate::page::ty::PageType;
-use crate::page::GeneralHeader;
 use crate::util::Persistable;
-use crate::{page, space, PAGE_SIZE};
+use crate::DataType;
+use crate::{space, Link};
+use rkyv::rancor::Strategy;
+use rkyv::ser::allocator::ArenaHandle;
+use rkyv::ser::sharing::Share;
+use rkyv::ser::Serializer;
+use rkyv::util::AlignedVec;
+use rkyv::{Archive, Deserialize, Portable, Serialize};
 
 pub type SpaceName = String;
-
-// TODO: This must be modified to describe table structure. I think page intervals
-//       can describe what lays in them. Like page 2-3 is primary index, 3 secondary1,
-//       4-... data pages, so we need some way to describe this.
-
-// TODO: Test all pages united in one file, start from basic situation with just
-//       3 pages: info, primary index and data. And then try to modify this more.
 
 // TODO: Minor. Add some schema description in `SpaceIndo`
 
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
 #[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize)]
-pub struct SpaceInfo {
+#[repr(C)]
+pub struct SpaceInfo<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
     pub name: SpaceName,
     pub primary_key_intervals: Vec<Interval>,
     pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
     pub data_intervals: Vec<Interval>,
+    pub pk_gen_state: Pk,
+    pub empty_links_list: Vec<Link>,
+    pub secondary_index_map: HashMap<String, DataType>,
 }
+
+unsafe impl<Pk> Portable for SpaceInfo<Pk> where Pk: Portable {}
 
 /// Represents some interval between values.
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Interval(pub usize, pub usize);
 
-impl From<SpaceInfo> for page::General<SpaceInfo> {
-    fn from(info: SpaceInfo) -> Self {
-        let header = GeneralHeader {
-            page_id: page::PageId::from(0),
-            previous_id: page::PageId::from(0),
-            next_id: page::PageId::from(0),
-            page_type: PageType::SpaceInfo,
-            space_id: info.id,
-            data_length: PAGE_SIZE as u32,
-        };
-        page::General {
-            header,
-            inner: info,
-        }
+impl Interval {
+    pub fn contains(&self, interval: &Interval) -> bool {
+        self.0 <= interval.0 && self.1 >= interval.1
     }
 }
 
-impl Persistable for SpaceInfo {
+impl<Pk> Persistable for SpaceInfo<Pk>
+where
+    Pk: Archive
+        + for<'a> Serialize<
+            Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
+        >,
+{
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
@@ -62,7 +59,7 @@ impl Persistable for SpaceInfo {
 mod test {
     use std::collections::HashMap;
 
-    use crate::page::{SpaceInfo, INNER_PAGE_LENGTH};
+    use crate::page::{SpaceInfo, INNER_PAGE_SIZE};
     use crate::util::Persistable;
 
     #[test]
@@ -73,9 +70,12 @@ mod test {
             name: "Test".to_string(),
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::new(),
-            data_intervals: vec![]
+            data_intervals: vec![],
+            pk_gen_state: (),
+            empty_links_list: vec![],
+            secondary_index_map: HashMap::new(),
         };
         let bytes = info.as_bytes();
-        assert!(bytes.as_ref().len() < INNER_PAGE_LENGTH)
+        assert!(bytes.as_ref().len() < INNER_PAGE_SIZE)
     }
 }

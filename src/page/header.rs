@@ -1,19 +1,21 @@
 //! [`GeneralHeader`] definitions.
 
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Portable, Serialize};
 
-use crate::{page, PAGE_SIZE};
 use crate::page::ty::PageType;
 use crate::space;
 use crate::util::Persistable;
+use crate::{page, PAGE_SIZE};
 
-pub const GENERAL_HEADER_SIZE: usize = 24;
+pub const DATA_VERSION: u32 = 1u32;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
+#[repr(C)]
 pub struct GeneralHeader {
+    pub data_version: u32,
     pub space_id: space::Id,
     pub page_id: page::PageId,
     pub previous_id: page::PageId,
@@ -22,9 +24,13 @@ pub struct GeneralHeader {
     pub data_length: u32,
 }
 
+// Safe because `GeneralHeader` is `repr(C)`
+unsafe impl Portable for GeneralHeader {}
+
 impl GeneralHeader {
     pub fn new(page_id: page::PageId, type_: PageType, space_id: space::Id) -> Self {
         Self {
+            data_version: DATA_VERSION,
             page_id,
             previous_id: 0.into(),
             next_id: 0.into(),
@@ -40,6 +46,7 @@ impl GeneralHeader {
     pub fn follow(&mut self) -> Self {
         self.next_id = self.page_id.next();
         Self {
+            data_version: DATA_VERSION,
             page_id: self.next_id,
             previous_id: self.page_id,
             next_id: 0.into(),
@@ -55,6 +62,7 @@ impl GeneralHeader {
     pub fn follow_with(&mut self, page_type: PageType) -> Self {
         self.next_id = self.page_id.next();
         Self {
+            data_version: DATA_VERSION,
             page_id: self.next_id,
             previous_id: self.page_id,
             next_id: 0.into(),
@@ -73,13 +81,20 @@ impl Persistable for GeneralHeader {
 
 #[cfg(test)]
 mod test {
-    use crate::page::header::GENERAL_HEADER_SIZE;
+    use crate::page::header::DATA_VERSION;
     use crate::util::Persistable;
-    use crate::{GeneralHeader, PageType, PAGE_SIZE};
+    use crate::{GeneralHeader, PageType, GENERAL_HEADER_SIZE, PAGE_SIZE};
+
+    #[test]
+    fn test_data_version() {
+        let header = GeneralHeader::new(1.into(), PageType::Empty, 2.into());
+        assert_eq!(header.data_version, 1u32);
+    }
 
     #[test]
     fn test_as_bytes() {
         let header = GeneralHeader {
+            data_version: DATA_VERSION,
             page_id: 1.into(),
             previous_id: 2.into(),
             next_id: 3.into(),
@@ -94,6 +109,7 @@ mod test {
     #[test]
     fn test_as_bytes_max() {
         let header = GeneralHeader {
+            data_version: DATA_VERSION,
             page_id: u32::MAX.into(),
             previous_id: (u32::MAX - 1).into(),
             next_id: (u32::MAX - 2).into(),

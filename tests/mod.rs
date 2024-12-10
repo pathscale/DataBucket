@@ -13,5 +13,8 @@ fn test_string_u16() {
         str: "123456789".to_string(),
         u: 2,
     };
-    assert_eq!(s.aligned_size(), rkyv::to_bytes::<rkyv::rancor::Error>(&s).unwrap().len())
+    assert_eq!(
+        s.aligned_size(),
+        rkyv::to_bytes::<rkyv::rancor::Error>(&s).unwrap().len()
+    )
 }

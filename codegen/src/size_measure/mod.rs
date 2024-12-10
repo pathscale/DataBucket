@@ -9,7 +9,7 @@ use crate::size_measure::parser::Parser;
 
 pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let input_fn = Parser::parse_struct(input)?;
-    let mut gen = Generator {
+    let gen = Generator {
         struct_def: input_fn,
     };
 

@@ -5,7 +5,18 @@ use crate::page;
 pub const LINK_LENGTH: usize = 12;
 
 #[derive(
-    Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+    Archive,
+    Copy,
+    Clone,
+    Deserialize,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
 )]
 pub struct Link {
     pub page_id: page::PageId,
