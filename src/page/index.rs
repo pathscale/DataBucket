@@ -71,21 +71,20 @@ where
     }
 }
 
-pub fn map_unique_tree_index<T, const PAGE_SIZE: usize>(
-    index: &TreeIndex<T, Link>,
+pub fn map_unique_tree_index<'a, T, const PAGE_SIZE: usize>(
+    index: impl Iterator<Item = (&'a T, &'a Link)>,
 ) -> Vec<IndexPage<T>>
 where
     T: Clone + Ord + SizeMeasurable + 'static,
 {
-    let guard = Guard::new();
     let mut pages = vec![];
     let mut current_page = IndexPage::default();
     let mut current_size = 8;
 
-    for (key, &link) in index.iter(&guard) {
+    for (key, link) in index {
         let index_value = IndexValue {
             key: key.clone(),
-            link,
+            link: *link,
         };
         current_size += index_value.aligned_size();
         if current_size > PAGE_SIZE {
@@ -100,18 +99,17 @@ where
     pages
 }
 
-pub fn map_tree_index<T, const PAGE_SIZE: usize>(
-    index: &TreeIndex<T, Arc<lockfree::set::Set<Link>>>,
+pub fn map_tree_index<'a, T, const PAGE_SIZE: usize>(
+    index: impl Iterator<Item = (&'a T, &'a Arc<lockfree::set::Set<Link>>)>,
 ) -> Vec<IndexPage<T>>
 where
     T: Clone + Ord + SizeMeasurable + 'static,
 {
-    let guard = Guard::new();
     let mut pages = vec![];
     let mut current_page = IndexPage::default();
     let mut current_size = 8;
 
-    for (key, links) in index.iter(&guard) {
+    for (key, links) in index {
         for link in links.iter() {
             let index_value = IndexValue {
                 key: key.clone(),
@@ -161,7 +159,8 @@ mod test {
         };
         index.insert(1u32, l).expect("is ok");
 
-        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(index.iter(&guard));
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].index_values.len(), 1);
         let v = &res[0].index_values[0];
@@ -185,7 +184,8 @@ mod test {
             index.insert(i, l).expect("is ok");
         }
 
-        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(index.iter(&guard));
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].index_values.len(), 1023);
         // As 1023 * 16 + 8
@@ -197,7 +197,8 @@ mod test {
             length: 32,
         };
         index.insert(1024, l).expect("is ok");
-        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(index.iter(&guard));
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].index_values.len(), 1023);
         assert_eq!(res[1].index_values.len(), 1);
@@ -218,7 +219,8 @@ mod test {
             index.insert(i, l).expect("is ok");
         }
 
-        let pages = map_unique_tree_index::<_, { PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let pages = map_unique_tree_index::<_, { PAGE_SIZE }>(index.iter(&guard));
         let res_index = TreeIndex::new();
 
         for page in pages {
@@ -245,7 +247,8 @@ mod test {
             index.insert(i, Arc::new(set)).expect("is ok");
         }
 
-        let pages = map_tree_index::<_, { PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let pages = map_tree_index::<_, { PAGE_SIZE }>(index.iter(&guard));
         let res_index = TreeIndex::new();
 
         for page in pages {
@@ -274,7 +277,8 @@ mod test {
         let s = "some string example".to_string();
         index.insert(s.clone(), l).expect("is ok");
 
-        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let res = map_unique_tree_index::<_, { PAGE_SIZE }>(index.iter(&guard));
         assert_eq!(res.len(), 1);
         assert_eq!(res[0].index_values.len(), 1);
         let v = &res[0].index_values[0];
@@ -297,7 +301,8 @@ mod test {
             };
             index.insert(i, l).expect("is ok");
         }
-        let pages = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(&index);
+        let guard = Guard::new();
+        let pages = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(index.iter(&guard));
         let page = pages.get(0).unwrap();
 
         let bytes = page.as_bytes();
