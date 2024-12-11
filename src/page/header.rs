@@ -5,7 +5,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::page::ty::PageType;
 use crate::space;
 use crate::util::Persistable;
-use crate::{page, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{page, PAGE_SIZE};
 
 pub const DATA_VERSION: u32 = 1u32;
 
@@ -71,7 +71,7 @@ impl GeneralHeader {
 
 impl Persistable for GeneralHeader {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<_, GENERAL_HEADER_SIZE>(self).unwrap()
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
 

@@ -1,7 +1,7 @@
 use eyre::{eyre, Result};
 
-use crate::Persistable;
 use crate::Link;
+use crate::Persistable;
 
 #[derive(Debug)]
 pub struct Data<const DATA_LENGTH: usize> {
@@ -94,7 +94,9 @@ mod tests {
         };
 
         let err = data.update_at(link, &[1, 2]).unwrap_err();
-        assert!(err.to_string().contains("New data length 2 does not match link length 3"));
+        assert!(err
+            .to_string()
+            .contains("New data length 2 does not match link length 3"));
     }
 
     #[test]
@@ -111,7 +113,9 @@ mod tests {
         };
 
         let err = data.update_at(link, &[1, 2, 3]).unwrap_err();
-        assert!(err.to_string().contains("Link range (offset: 98, length: 3) exceeds data bounds (100)"));
+        assert!(err
+            .to_string()
+            .contains("Link range (offset: 98, length: 3) exceeds data bounds (100)"));
     }
 
     #[test]
@@ -128,6 +132,8 @@ mod tests {
         };
 
         let err = data.get_at(link).unwrap_err();
-        assert!(err.to_string().contains("Link range (offset: 98, length: 3) exceeds data bounds (100)"));
+        assert!(err
+            .to_string()
+            .contains("Link range (offset: 98, length: 3) exceeds data bounds (100)"));
     }
 }
