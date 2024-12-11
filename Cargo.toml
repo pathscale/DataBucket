@@ -15,7 +15,7 @@ data_bucket_derive = {path = "codegen" , version = "0.1.0"}
 
 eyre = "0.6.12"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
-rkyv = { version = "0.8.9" }
+rkyv = { version = "0.8.9", features = ["uuid-1"]}
 scc = "2.1.16"
 lockfree = "0.5.1"
 serde = { version = "1.0.215", features = ["derive"] }

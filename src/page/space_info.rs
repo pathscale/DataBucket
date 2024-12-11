@@ -1,15 +1,16 @@
 //! [`SpaceInfo`] declaration.
 use std::collections::HashMap;
 
-use crate::util::Persistable;
-use crate::DataType;
-use crate::{space, Link};
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
-use rkyv::{Archive, Deserialize, Portable, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
+
+use crate::util::Persistable;
+use crate::DataType;
+use crate::{space, Link};
 
 pub type SpaceName = String;
 
@@ -18,7 +19,6 @@ pub type SpaceName = String;
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
 #[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize)]
-#[repr(C)]
 pub struct SpaceInfo<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
@@ -30,8 +30,6 @@ pub struct SpaceInfo<Pk = ()> {
     pub empty_links_list: Vec<Link>,
     pub secondary_index_map: HashMap<String, DataType>,
 }
-
-unsafe impl<Pk> Portable for SpaceInfo<Pk> where Pk: Portable {}
 
 /// Represents some interval between values.
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]

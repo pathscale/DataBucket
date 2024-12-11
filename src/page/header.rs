@@ -1,6 +1,6 @@
 //! [`GeneralHeader`] definitions.
 
-use rkyv::{Archive, Deserialize, Portable, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
 use crate::space;
@@ -13,7 +13,6 @@ pub const DATA_VERSION: u32 = 1u32;
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
-#[repr(C)]
 pub struct GeneralHeader {
     pub data_version: u32,
     pub space_id: space::Id,
@@ -23,9 +22,6 @@ pub struct GeneralHeader {
     pub page_type: PageType,
     pub data_length: u32,
 }
-
-// Safe because `GeneralHeader` is `repr(C)`
-unsafe impl Portable for GeneralHeader {}
 
 impl GeneralHeader {
     pub fn new(page_id: page::PageId, type_: PageType, space_id: space::Id) -> Self {
