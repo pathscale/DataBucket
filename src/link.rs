@@ -5,7 +5,18 @@ use crate::page;
 pub const LINK_LENGTH: usize = 12;
 
 #[derive(
-    Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+    Archive,
+    Copy,
+    Clone,
+    Deserialize,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
 )]
 pub struct Link {
     pub page_id: page::PageId,
@@ -25,7 +36,7 @@ mod tests {
             offset: 10,
             length: 20,
         };
-        let bytes = rkyv::to_bytes::<_, 16>(&link).unwrap();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&link).unwrap();
 
         assert_eq!(bytes.len(), LINK_LENGTH)
     }

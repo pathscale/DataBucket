@@ -51,6 +51,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     Clone,
     Deserialize,
     Debug,
+    Default,
     Display,
     Eq,
     From,
@@ -104,7 +105,7 @@ mod tests {
     #[test]
     fn general_header_length_valid() {
         let header = get_general_header();
-        let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&header).unwrap();
 
         assert_eq!(bytes.len(), GENERAL_HEADER_SIZE)
     }
