@@ -1,5 +1,5 @@
 use crate::link::{Link, LINK_LENGTH};
-use std::mem;
+use std::{mem, sync::Arc};
 use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
@@ -63,6 +63,20 @@ impl SizeMeasurable for String {
         } else {
             align(self.len() + 8)
         }
+    }
+}
+
+impl<T: SizeMeasurable> SizeMeasurable for Arc<T> {
+    fn aligned_size(&self) -> usize {
+        self.as_ref().aligned_size()
+    }
+}
+impl<T: SizeMeasurable> SizeMeasurable for lockfree::set::Set<T> {
+    fn aligned_size(&self) -> usize {
+        self
+        .iter()
+        .map(|elem| elem.aligned_size())
+        .sum()
     }
 }
 
