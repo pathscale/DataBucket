@@ -1,65 +1,63 @@
 use rkyv::{primitive::{ArchivedI128, ArchivedI16, ArchivedI32, ArchivedI64, ArchivedU128, ArchivedU16, ArchivedU32, ArchivedU64}, string::ArchivedString};
 
+fn advance_accum_for_padding(mut accum: usize, padding: usize) -> usize {
+    if accum % padding != 0 {
+        accum += padding - accum % padding;
+    }
+    accum
+}
+
+fn advance_pointer_for_padding(mut current_pointer: *const u8, start_pointer: *const u8, padding: usize) -> *const u8 {
+    if unsafe { current_pointer.byte_offset_from(start_pointer) % padding as isize != 0 } {
+        current_pointer = unsafe { current_pointer.add(
+            (padding as isize - current_pointer.byte_offset_from(start_pointer) % padding as isize) as usize)
+        };
+    }
+    current_pointer
+}
+
 pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<String> {
     let mut data_length: usize = {
         let mut accum: usize = 0;
         for column in columns.iter() {
             match column.1.as_str() {
                 "String" => {
-                    if accum % 4 != 0 {
-                        accum += 4 - accum % 4;
-                    }
+                    accum = advance_accum_for_padding(accum, 4);
                     accum += std::mem::size_of::<ArchivedString>();
                 },
 
                 "i128" => {
-                    if accum % std::mem::size_of::<ArchivedI128>() != 0 {
-                        accum += std::mem::size_of::<ArchivedI128>() - accum % std::mem::size_of::<ArchivedI128>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI128>());
                     accum += std::mem::size_of::<ArchivedI128>();
                 },
                 "i64" => {
-                    if accum % std::mem::size_of::<ArchivedI64>() != 0 {
-                        accum += std::mem::size_of::<ArchivedI64>() - accum % std::mem::size_of::<ArchivedI64>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI64>());
                     accum += std::mem::size_of::<ArchivedI64>();
                 }
                 "i32" => {
-                    if accum % std::mem::size_of::<ArchivedI32>() != 0 {
-                        accum += std::mem::size_of::<ArchivedI32>() - accum % std::mem::size_of::<ArchivedI32>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI32>());
                     accum += std::mem::size_of::<ArchivedI32>();
                 }
                 "i16" => {
-                    if accum % std::mem::size_of::<ArchivedI16>() != 0 {
-                        accum += std::mem::size_of::<ArchivedI16>() - accum % std::mem::size_of::<ArchivedI16>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI16>());
                     accum += std::mem::size_of::<ArchivedI16>();
                 }
                 "i8" => accum += std::mem::size_of::<i8>(),
 
                 "u128" => {
-                    if accum % std::mem::size_of::<ArchivedU128>() != 0 {
-                        accum += std::mem::size_of::<ArchivedU128>() - accum % std::mem::size_of::<ArchivedU128>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU128>());
                     accum += std::mem::size_of::<ArchivedU128>();
                 }
                 "u64" => {
-                    if accum % std::mem::size_of::<ArchivedU64>() != 0 {
-                        accum += std::mem::size_of::<ArchivedU64>() - accum % std::mem::size_of::<ArchivedU64>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU64>());
                     accum += std::mem::size_of::<ArchivedU64>();
                 }
                 "u32" => {
-                    if accum % std::mem::size_of::<ArchivedU32>() != 0 {
-                        accum += std::mem::size_of::<ArchivedU32>() - accum % std::mem::size_of::<ArchivedU32>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU32>());
                     accum += std::mem::size_of::<ArchivedU32>();
                 }
                 "u16" => {
-                    if accum % std::mem::size_of::<ArchivedU16>() != 0 {
-                        accum += std::mem::size_of::<ArchivedU16>() - accum % std::mem::size_of::<ArchivedU16>();
-                    }
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU16>());
                     accum += std::mem::size_of::<ArchivedU16>();
                 }
                 "u8" => accum += std::mem::size_of::<u8>(),
@@ -79,50 +77,32 @@ pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<Str
     for column in columns.iter() {
         match column.1.as_str() {
             "String" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) } % 4 != 0 {
-                    current_pointer = unsafe { current_pointer.add((4 - current_pointer.byte_offset_from(start_pointer) % 4) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, 4);
                 let archived_ptr: *const ArchivedString = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedString>()) };
             },
 
             "i128" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI128>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedI128>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI128>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedI128>());
                 let archived_ptr: *const ArchivedI128 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedI128>()) };
             },
             "i64" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI64>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedI64>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI64>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedI64>());
                 let archived_ptr: *const ArchivedI64 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedI64>()) };
             },
             "i32" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI32>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedI32>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI32>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedI32>());
                 let archived_ptr: *const ArchivedI32 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedI32>()) };
             },
             "i16" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI16>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedI16>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI16>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedI16>());
                 let archived_ptr: *const ArchivedI16 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedI16>()) };
@@ -134,41 +114,25 @@ pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<Str
             },
 
             "u128" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedU128>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedU128>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedU128>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedU128>());
                 let archived_ptr: *const ArchivedU128 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedU128>()) };
             },
             "u64" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedU64>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedU64>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedU64>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedU64>());
                 let archived_ptr: *const ArchivedU64 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedU64>()) };
             },
             "u32" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedU32>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedU32>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedU32>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedU32>());
                 let archived_ptr: *const ArchivedU32 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedU32>()) };
             },
             "u16" => {
-                if unsafe { current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI16>() as isize != 0 } {
-                    current_pointer = unsafe { current_pointer.add(
-                        (std::mem::size_of::<ArchivedI16>() as isize -
-                        current_pointer.byte_offset_from(start_pointer) % std::mem::size_of::<ArchivedI16>() as isize) as usize) };
-                }
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedU16>());
                 let archived_ptr: *const ArchivedU16 = current_pointer.cast();
                 output.push(unsafe { (*archived_ptr).to_string() });
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedU16>()) };
