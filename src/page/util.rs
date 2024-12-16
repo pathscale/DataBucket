@@ -8,7 +8,7 @@ use rkyv::Archive;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{DataPage, GeneralPage, IndexData, Persistable, SpaceInfoData, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 use super::{Interval, SpaceInfo};
 
@@ -219,6 +219,29 @@ where
     Ok(result)
 }
 
+pub fn load_pages(file: &mut std::fs::File) -> eyre::Result<Vec<GeneralPage<Vec<u8>>>>
+{
+    let mut pages: Vec<GeneralPage<Vec<u8>>> = vec![];
+
+    loop {
+        let mut header_buf: [u8; GENERAL_HEADER_SIZE] = [0u8; GENERAL_HEADER_SIZE];
+        file.read_exact(&mut header_buf)?;
+        let header = unsafe { rkyv::archived_root::<GeneralHeader>(&header_buf) };
+
+        let mut inner_buf = vec![0u8; header.data_length as usize];
+        file.read_exact(&mut inner_buf)?;
+
+        pages.push(GeneralPage{header: header.deserialize(&mut rkyv::Infallible).unwrap(), inner: inner_buf});
+        let pos = file.seek(std::io::SeekFrom::Current(
+            PAGE_SIZE as i64 - GENERAL_HEADER_SIZE as i64 - header.data_length as i64))?;
+        if pos >= file.metadata().unwrap().len() {
+            break;
+        }
+    }
+
+    Ok(pages)
+}
+
 #[cfg(test)]
 mod test {
     use scc::ebr::Guard;
@@ -257,7 +280,7 @@ mod test {
             previous_id: 0.into(),
             next_id: 0.into(),
             page_type: PageType::SpaceInfo,
-            data_length: PAGE_SIZE as u32,
+            data_length: 0 as u32,
         };
         let generalised = map_index_pages_to_general(res, &mut header);
         assert_eq!(generalised.len(), 3);
