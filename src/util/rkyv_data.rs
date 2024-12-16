@@ -33,39 +33,39 @@ pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<Str
                 "i64" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI64>());
                     accum += std::mem::size_of::<ArchivedI64>();
-                }
+                },
                 "i32" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI32>());
                     accum += std::mem::size_of::<ArchivedI32>();
-                }
+                },
                 "i16" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedI16>());
                     accum += std::mem::size_of::<ArchivedI16>();
-                }
+                },
                 "i8" => accum += std::mem::size_of::<i8>(),
 
                 "u128" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU128>());
                     accum += std::mem::size_of::<ArchivedU128>();
-                }
+                },
                 "u64" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU64>());
                     accum += std::mem::size_of::<ArchivedU64>();
-                }
+                },
                 "u32" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU32>());
                     accum += std::mem::size_of::<ArchivedU32>();
-                }
+                },
                 "u16" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedU16>());
                     accum += std::mem::size_of::<ArchivedU16>();
-                }
+                },
                 "u8" => accum += std::mem::size_of::<u8>(),
 
                 "f64" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedF64>());
                     accum += std::mem::size_of::<ArchivedF64>();
-                }
+                },
                 "f32" => {
                     accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedF32>());
                     accum += std::mem::size_of::<ArchivedF32>();
