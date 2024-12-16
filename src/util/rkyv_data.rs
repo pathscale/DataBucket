@@ -1,4 +1,4 @@
-use rkyv::{primitive::{ArchivedI128, ArchivedI16, ArchivedI32, ArchivedI64, ArchivedU128, ArchivedU16, ArchivedU32, ArchivedU64}, string::ArchivedString};
+use rkyv::{primitive::{ArchivedF32, ArchivedF64, ArchivedI128, ArchivedI16, ArchivedI32, ArchivedI64, ArchivedU128, ArchivedU16, ArchivedU32, ArchivedU64}, string::ArchivedString};
 
 fn advance_accum_for_padding(mut accum: usize, padding: usize) -> usize {
     if accum % padding != 0 {
@@ -61,6 +61,15 @@ pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<Str
                     accum += std::mem::size_of::<ArchivedU16>();
                 }
                 "u8" => accum += std::mem::size_of::<u8>(),
+
+                "f64" => {
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedF64>());
+                    accum += std::mem::size_of::<ArchivedF64>();
+                }
+                "f32" => {
+                    accum = advance_accum_for_padding(accum, std::mem::size_of::<ArchivedF32>());
+                    accum += std::mem::size_of::<ArchivedF32>();
+                }
 
                 _ => panic!("Unknown data type {:?}", column.1),
             }
@@ -143,6 +152,19 @@ pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<Str
                 current_pointer = unsafe { current_pointer.add(std::mem::size_of::<u8>()) };
             },
 
+            "f64" => {
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedF64>());
+                let archived_ptr: *const ArchivedF64 = current_pointer.cast();
+                output.push(unsafe { (*archived_ptr).to_string() });
+                current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedF64>()) };
+            },
+            "f32" => {
+                current_pointer = advance_pointer_for_padding(current_pointer, start_pointer, std::mem::size_of::<ArchivedF32>());
+                let archived_ptr: *const ArchivedF32 = current_pointer.cast();
+                output.push(unsafe { (*archived_ptr).to_string() });
+                current_pointer = unsafe { current_pointer.add(std::mem::size_of::<ArchivedF32>()) };
+            },
+
             _ => panic!("Unknown data type: {:?}", column.1),
         }
     }
@@ -165,7 +187,9 @@ mod test {
         pub int4: u8,
         pub int5: i32,
         pub int6: u8,
-        pub string7: String,
+        pub string3: String,
+        pub int7: i8,
+        pub float1: f64,
     }
 
     #[test]
@@ -179,7 +203,9 @@ mod test {
             int4: 5,
             int5: 6,
             int6: 7,
-            string7: "x".to_owned(),
+            string3: "x".to_owned(),
+            int7: 8,
+            float1: 3.14159265358
         }).unwrap();
         let parsed = parse_archived_row(&buffer, vec![
             ("string1".to_string(), "String".to_string()),
@@ -190,7 +216,9 @@ mod test {
             ("int4".to_string(), "u8".to_string()),
             ("int5".to_string(), "i32".to_string()),
             ("int6".to_string(), "u8".to_string()),
-            ("string7".to_string(), "String".to_string()),
+            ("string3".to_string(), "String".to_string()),
+            ("int7".to_string(), "i8".to_string()),
+            ("float1".to_string(), "f64".to_string()),
         ]);
         assert_eq!(parsed, [
             "000000000000000".to_string(),
@@ -202,6 +230,8 @@ mod test {
             "6".to_string(),
             "7".to_string(),
             "x".to_string(),
+            "8".to_string(),
+            "3.14159265358".to_string(),
         ])
     }
 }
