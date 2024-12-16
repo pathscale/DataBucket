@@ -193,7 +193,7 @@ mod test {
     }
 
     #[test]
-    fn test_struct() {
+    fn test_parse_archived_row() {
         let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct {
             string1: "000000000000000".to_string(),
             int1: 20,
