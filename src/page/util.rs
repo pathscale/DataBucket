@@ -142,7 +142,7 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
 pub fn parse_index_page<T, const PAGE_SIZE: usize>(
     file: &mut std::fs::File,
     index: u32,
-) -> eyre::Result<GeneralPage<IndexData<T>>>
+) -> eyre::Result<Vec<IndexData<T>>>
 where
     T: Archive,
     <T as rkyv::Archive>::Archived: rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>>,
@@ -152,14 +152,12 @@ where
 
     let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer)?;
-    let archived =
-        unsafe { rkyv::access_unchecked::<<IndexData<T> as Archive>::Archived>(&buffer[..]) };
-    let index: IndexData<T> = rkyv::deserialize(archived).expect("data should be valid");
+    let archived = unsafe {
+        rkyv::access_unchecked::<<Vec<IndexData<T>> as Archive>::Archived>(&buffer[..]) 
+    };
+    let index_records: Vec<IndexData<T>> = rkyv::deserialize(archived).expect("data should be valid");
 
-    Ok(GeneralPage {
-        header,
-        inner: index,
-    })
+    Ok(index_records)
 }
 
 pub fn parse_space_info<const PAGE_SIZE: usize>(
@@ -211,8 +209,8 @@ where
     let mut result: Vec<IndexData<T>> = vec![];
     for interval in intervals.iter() {
         for index in interval.0..interval.1 {
-            let index_page = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
-            result.push(index_page.inner);
+            let mut index_records = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
+            result.append(&mut index_records);
         }
     }
 
@@ -345,8 +343,8 @@ mod test {
         space_info_page
     }
 
-    fn create_index_pages(intervals: &Vec<Interval>) -> Vec<GeneralPage<IndexData<String>>> {
-        let mut index_pages = Vec::<GeneralPage<IndexData<String>>>::new();
+    fn create_index_pages(intervals: &Vec<Interval>) -> Vec<GeneralPage<Vec<IndexData<String>>>> {
+        let mut index_pages = Vec::<GeneralPage<Vec<IndexData<String>>>>::new();
 
         for interval in intervals {
             for index in interval.0..interval.1 {
@@ -371,7 +369,7 @@ mod test {
                 };
                 let index_page = GeneralPage {
                     header: index_header,
-                    inner: index_data,
+                    inner: vec![index_data],
                 };
                 index_pages.push(index_page);
             }
