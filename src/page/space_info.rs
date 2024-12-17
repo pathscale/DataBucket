@@ -23,12 +23,13 @@ pub struct SpaceInfo<Pk = ()> {
     pub page_count: u32,
     pub name: SpaceName,
     pub row_schema: Vec<(String, String)>,
+    pub primary_key_type: (String, String),
     pub primary_key_intervals: Vec<Interval>,
+    pub secondary_index_types: Vec<(String, String)>,
     pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
     pub data_intervals: Vec<Interval>,
     pub pk_gen_state: Pk,
     pub empty_links_list: Vec<Link>,
-    pub secondary_index_types: Vec<(String, String)>,
 }
 
 /// Represents some interval between values.
@@ -67,6 +68,7 @@ mod test {
             page_count: 0,
             name: "Test".to_string(),
             row_schema: vec![],
+            primary_key_type: ("id".to_string(), "i32".to_string()),
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::new(),
             data_intervals: vec![],
