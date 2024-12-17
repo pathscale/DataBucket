@@ -17,7 +17,7 @@ pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
     map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
-    parse_page, persist_page, read_index_pages,
+    parse_page, persist_page, read_index_pages, seek_to_page_start,
 };
 
 // TODO: Move to config
