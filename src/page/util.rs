@@ -10,6 +10,7 @@ use crate::page::ty::PageType;
 use crate::page::General;
 use crate::{space, DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
+use super::rkyv_data::parse_archived_row;
 use super::{Interval, SpaceInfo};
 
 pub fn map_index_pages_to_general<T>(
@@ -119,6 +120,7 @@ pub fn parse_data_record<const PAGE_SIZE: usize>(
     index: u32,
     offset: u32,
     length: u32,
+    schema: &Vec<(String, String)>,
 ) -> eyre::Result<Vec<String>> {
     seek_to_page_start(file, index)?;
     let header = parse_general_header(file)?;
@@ -130,23 +132,9 @@ pub fn parse_data_record<const PAGE_SIZE: usize>(
     let mut buffer = vec![0u8; length as usize];
     file.read_exact(&mut buffer)?;
 
-;
-    let mut buffer = [0u8; INNER_PAGE_SIZE];
-    if header.next_id == 0.into() {
-        file.read(&mut buffer)?;
-    } else {
-        file.read_exact(&mut buffer)?;
-    }
+    let parsed_record = parse_archived_row(&buffer, &schema);
 
-    let data = DataPage {
-        data: buffer,
-        length: header.data_length,
-    };
-
-    Ok(GeneralPage {
-        header,
-        inner: data,
-    })
+    Ok(parsed_record)
 }
 
 pub fn parse_index_page<T, const PAGE_SIZE: usize>(
@@ -246,60 +234,35 @@ where
 }
 
 fn read_data_pages<const PAGE_SIZE: usize>(mut file: &mut std::fs::File) -> eyre::Result<Vec<Vec<String>>> {
-    let space_info = parse_space_info(file)?;
+    let space_info = parse_space_info::<PAGE_SIZE>(file)?;
     let primary_key_fields = space_info.primary_key_fields;
     if primary_key_fields.len() != 1 {
         panic!("Currently only single primary key is supported");
     }
 
     let primary_key_type = space_info.row_schema.iter()
-        .filter(|(field_name, field_type)| field_name == &primary_key_fields[0])
-        .map(|(field_name, field_type)| field_type)
+        .filter(|(field_name, _field_type)| field_name == &primary_key_fields[0])
+        .map(|(_field_name, field_type)| field_type)
         .take(1)
         .collect::<Vec<&String>>()[0].as_str();
     let links = match primary_key_type {
         "i64" => read_index_pages::<i64, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
             .iter()
-            .map(|index_page| index_page.index_values)
+            .map(|index_page| &index_page.index_values)
             .flatten()
             .map(|index_value| index_value.link)
             .collect::<Vec<Link>>(),
-        _ => panic!("Unsupported primary key data type"),
+        _ => panic!("Unsupported primary key data type `{}`", primary_key_type),
     };
+
+    let mut result: Vec<Vec<String>> = vec![];
     for link in links {
-        let page = parse_data_page::<PAGE_SIZE>(&mut file, link.page_id.0)?;
+        let row = parse_data_record::<PAGE_SIZE>(&mut file, link.page_id.0, link.offset, link.length, &space_info.row_schema)?;
+        result.push(row);
     }
 
-    todo!()
+    Ok(result)
 }
-
-// fn read_data_pages_from_space<const PAGE_SIZE: usize>(file: &mut std::fs::File) -> eyre::Result<Vec<HashMap<String, String>>> {
-//     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
-//     let mut result: Vec<HashMap<String, String>> = vec![];
-//     for interval in space_info.data_intervals.iter() {
-//         for index in interval.0 .. interval.1 {
-//             let data_page = parse_data_page(file, index)?;
-
-//             file.seek(io::SeekFrom::Start(PAGE_SIZE * index))?;
-//             for column in space_info.row_schema {
-//                 let value = match column.1 {
-//                     DataType::String => {
-//                         rkyv::from_bytes_unchecked(bytes)
-//                     },
-//                     DataType::Integer => {
-//                         todo!()
-//                     },
-//                     DataType::Float => {
-//                         todo!()
-//                     }
-//                 };
-//             }
-
-//             let row: HashMap<String, String> = parse_binary_row(&data_page, &row_schema);
-//         }
-//     }
-//     todo!()
-// }
 
 #[cfg(test)]
 mod test {
@@ -310,6 +273,7 @@ mod test {
     use std::path::Path;
 
     use crate::page::index::IndexValue;
+    use crate::page::util::read_secondary_index_pages;
     use crate::page::INNER_PAGE_SIZE;
     use crate::{
         map_index_pages_to_general, map_unique_tree_index, GeneralHeader, GeneralPage,
@@ -455,7 +419,7 @@ mod test {
 
         // read the data
         let mut file = std::fs::File::open(filename).unwrap();
-        let index_pages = read_index_pages::<String, PAGE_SIZE>(
+        let index_pages = read_secondary_index_pages::<String, PAGE_SIZE>(
             &mut file,
             "string_index",
             vec![Interval(1, 2), Interval(5, 6)],

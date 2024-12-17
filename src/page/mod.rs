@@ -4,6 +4,7 @@ mod index;
 mod space_info;
 mod ty;
 mod util;
+mod rkyv_data;
 
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
@@ -14,7 +15,7 @@ pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
-    map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
+    map_data_pages_to_general, map_index_pages_to_general, parse_index_page,
     parse_page, persist_page, read_index_pages,
 };
 

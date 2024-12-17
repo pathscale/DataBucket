@@ -16,7 +16,7 @@ fn advance_pointer_for_padding(mut current_pointer: *const u8, start_pointer: *c
     current_pointer
 }
 
-pub fn parse_archived_row(buf: &[u8], columns: Vec<(String, String)>) -> Vec<String> {
+pub fn parse_archived_row(buf: &[u8], columns: &Vec<(String, String)>) -> Vec<String> {
     let mut data_length: usize = {
         let mut accum: usize = 0;
         for column in columns.iter() {
@@ -207,7 +207,7 @@ mod test {
             int7: 8,
             float1: 3.14159265358
         }).unwrap();
-        let parsed = parse_archived_row(&buffer, vec![
+        let parsed = parse_archived_row(&buffer, &vec![
             ("string1".to_string(), "String".to_string()),
             ("int1".to_string(), "i32".to_string()),
             ("string2".to_string(), "String".to_string()),
