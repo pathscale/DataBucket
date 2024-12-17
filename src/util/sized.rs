@@ -73,10 +73,7 @@ impl<T: SizeMeasurable> SizeMeasurable for Arc<T> {
 }
 impl<T: SizeMeasurable> SizeMeasurable for lockfree::set::Set<T> {
     fn aligned_size(&self) -> usize {
-        self
-        .iter()
-        .map(|elem| elem.aligned_size())
-        .sum()
+        self.iter().map(|elem| elem.aligned_size()).sum()
     }
 }
 
