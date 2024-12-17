@@ -23,7 +23,7 @@ pub struct SpaceInfo<Pk = ()> {
     pub page_count: u32,
     pub name: SpaceName,
     pub row_schema: Vec<(String, String)>,
-    pub primary_key_type: (String, String),
+    pub primary_key_fields: Vec<String>,
     pub primary_key_intervals: Vec<Interval>,
     pub secondary_index_types: Vec<(String, String)>,
     pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
