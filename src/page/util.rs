@@ -8,7 +8,7 @@ use rkyv::Archive;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::General;
-use crate::{space, DataPage, GeneralPage, IndexData, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{space, DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 use super::{Interval, SpaceInfo};
 
@@ -114,13 +114,23 @@ where
     })
 }
 
-pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
+pub fn parse_data_record<const PAGE_SIZE: usize>(
     file: &mut std::fs::File,
     index: u32,
-) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+    offset: u32,
+    length: u32,
+) -> eyre::Result<Vec<String>> {
     seek_to_page_start(file, index)?;
     let header = parse_general_header(file)?;
+    if header.page_type != PageType::Data {
+        return Err(eyre::Report::msg(format!("The type of the page with index {} is not `Data`", index)));
+    }
 
+    file.seek(io::SeekFrom::Current(offset as i64))?;
+    let mut buffer = vec![0u8; length as usize];
+    file.read_exact(&mut buffer)?;
+
+;
     let mut buffer = [0u8; INNER_PAGE_SIZE];
     if header.next_id == 0.into() {
         file.read(&mut buffer)?;
@@ -176,7 +186,7 @@ pub fn parse_space_info<const PAGE_SIZE: usize>(
     Ok(space_info)
 }
 
-pub fn read_index_pages<T, const PAGE_SIZE: usize>(
+pub fn read_secondary_index_pages<T, const PAGE_SIZE: usize>(
     file: &mut std::fs::File,
     index_name: &str,
     intervals: Vec<Interval>,
@@ -215,6 +225,52 @@ where
     }
 
     Ok(result)
+}
+
+pub fn read_index_pages<T, const PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    intervals: &Vec<Interval>,
+) -> eyre::Result<Vec<IndexData<T>>>
+where
+    T: Archive,
+    <T as rkyv::Archive>::Archived: rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>>,
+{
+    let mut result: Vec<IndexData<T>> = vec![];
+    for interval in intervals.iter() {
+        for index in interval.0..interval.1 {
+            let mut index_records = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
+            result.append(&mut index_records);
+        }
+    }
+    Ok(result)
+}
+
+fn read_data_pages<const PAGE_SIZE: usize>(mut file: &mut std::fs::File) -> eyre::Result<Vec<Vec<String>>> {
+    let space_info = parse_space_info(file)?;
+    let primary_key_fields = space_info.primary_key_fields;
+    if primary_key_fields.len() != 1 {
+        panic!("Currently only single primary key is supported");
+    }
+
+    let primary_key_type = space_info.row_schema.iter()
+        .filter(|(field_name, field_type)| field_name == &primary_key_fields[0])
+        .map(|(field_name, field_type)| field_type)
+        .take(1)
+        .collect::<Vec<&String>>()[0].as_str();
+    let links = match primary_key_type {
+        "i64" => read_index_pages::<i64, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
+            .iter()
+            .map(|index_page| index_page.index_values)
+            .flatten()
+            .map(|index_value| index_value.link)
+            .collect::<Vec<Link>>(),
+        _ => panic!("Unsupported primary key data type"),
+    };
+    for link in links {
+        let page = parse_data_page::<PAGE_SIZE>(&mut file, link.page_id.0)?;
+    }
+
+    todo!()
 }
 
 // fn read_data_pages_from_space<const PAGE_SIZE: usize>(file: &mut std::fs::File) -> eyre::Result<Vec<HashMap<String, String>>> {
