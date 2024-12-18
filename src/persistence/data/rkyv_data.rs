@@ -82,14 +82,14 @@ pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
     }
 
     let start_pointer = unsafe { buf.as_ptr().add(buf.len()).sub(data_length) };
-    let current_pointer = start_pointer;
+    let mut current_pointer = start_pointer;
     let mut output: Vec<_> = vec![];
     for column in columns.iter() {
         let value =
             DataTypeValue::from_str(column.1.as_ref()).expect("data type should be supported");
         let data_type = value.as_data_type();
         let deserialized = data_type.from_pointer(current_pointer, start_pointer);
-        data_type.advance_pointer(current_pointer);
+        data_type.advance_pointer(&mut current_pointer);
         output.push(deserialized);
 
         // match column.1.as_str() {
