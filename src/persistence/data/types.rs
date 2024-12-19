@@ -53,7 +53,18 @@ impl FromStr for DataTypeValue {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.as_ref() {
             "String" => String::default().into(),
+            "i128" => i128::default().into(),
+            "i64" => i64::default().into(),
             "i32" => i32::default().into(),
+            "i16" => i16::default().into(),
+            "i8" => i8::default().into(),
+            "u128" => u128::default().into(),
+            "u64" => u64::default().into(),
+            "u32" => u32::default().into(),
+            "u16" => u16::default().into(),
+            "u8" => u8::default().into(),
+            "f64" => f64::default().into(),
+            "f32" => f32::default().into(),
             _ => unreachable!(),
         })
     }
@@ -71,13 +82,17 @@ impl DataType for String {
         unsafe { (*archived_ptr).to_string() }.into()
     }
 
+    fn advance_pointer_for_padding(&self, pointer: &mut *const u8, start_pointer: *const u8) {
+        *pointer = advance_pointer_for_padding(*pointer, start_pointer, 4);
+    }
+
     fn advance_pointer(&self, pointer: &mut *const u8) {
         *pointer = unsafe { pointer.add(size_of::<ArchivedString>()) };
     }
 }
 
 macro_rules! impl_datatype {
-    ($datatype:ty, $archived_datatype:ty) => {
+    ($datatype:ty, $archived_datatype:ty, $datatype_value:expr) => {
         impl DataType for $datatype {
             fn advance_accum(&self, accum: &mut usize) {
                 *accum = advance_accum_for_padding(*accum, size_of::<$archived_datatype>());
@@ -91,7 +106,12 @@ macro_rules! impl_datatype {
                     size_of::<$archived_datatype>(),
                 );
                 let archived_ptr: *const $archived_datatype = current_pointer.cast();
-                unsafe { (*archived_ptr).to_string() }.into()
+
+                $datatype_value(unsafe { (*archived_ptr) }.into())
+            }
+
+            fn advance_pointer_for_padding(&self, pointer: &mut *const u8, start_pointer: *const u8) {
+                *pointer = advance_pointer_for_padding(*pointer, start_pointer, size_of::<$archived_datatype>());
             }
 
             fn advance_pointer(&self, pointer: &mut *const u8) {
@@ -101,15 +121,15 @@ macro_rules! impl_datatype {
     };
 }
 
-impl_datatype! {i128, ArchivedI128}
-impl_datatype! {i64, ArchivedI64}
-impl_datatype! {i32, ArchivedI32}
-impl_datatype! {i16, ArchivedI16}
-impl_datatype! {i8, i8}
-impl_datatype! {u128, ArchivedU128}
-impl_datatype! {u64, ArchivedU64}
-impl_datatype! {u32, ArchivedU32}
-impl_datatype! {u16, ArchivedU16}
-impl_datatype! {u8, u8}
-impl_datatype! {f64, ArchivedF64}
-impl_datatype! {f32, ArchivedF32}
+impl_datatype! {i128, ArchivedI128, DataTypeValue::I128}
+impl_datatype! {i64, ArchivedI64, DataTypeValue::I64}
+impl_datatype! {i32, ArchivedI32, DataTypeValue::I32}
+impl_datatype! {i16, ArchivedI16, DataTypeValue::I16}
+impl_datatype! {i8, i8, DataTypeValue::I8}
+impl_datatype! {u128, ArchivedU128, DataTypeValue::U128}
+impl_datatype! {u64, ArchivedU64, DataTypeValue::U64}
+impl_datatype! {u32, ArchivedU32, DataTypeValue::U32}
+impl_datatype! {u16, ArchivedU16, DataTypeValue::U16}
+impl_datatype! {u8, u8, DataTypeValue::U8}
+impl_datatype! {f64, ArchivedF64, DataTypeValue::F64}
+impl_datatype! {f32, ArchivedF32, DataTypeValue::F32}
