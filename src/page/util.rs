@@ -282,6 +282,7 @@ fn read_data_pages<const PAGE_SIZE: usize>(
 
 #[cfg(test)]
 mod test {
+    use rkyv::{Archive, Deserialize, Serialize};
     use scc::ebr::Guard;
     use scc::TreeIndex;
     use std::collections::HashMap;
@@ -420,7 +421,7 @@ mod test {
         if Path::new(filename).exists() {
             remove_file(filename).unwrap();
         }
-        let mut file = std::fs::File::create(filename).unwrap();
+        let mut file: std::fs::File = std::fs::File::create(filename).unwrap();
 
         let intervals = vec![Interval(1, 3), Interval(5, 8)];
 
@@ -446,5 +447,117 @@ mod test {
         assert_eq!(index_pages[0].index_values[0].link.page_id, 2.into());
         assert_eq!(index_pages[0].index_values[0].link.offset, 0);
         assert_eq!(index_pages[0].index_values[0].link.length, 0);
+    }
+
+    #[derive(Archive, Debug, Deserialize, Serialize)]
+    struct TableStruct {
+        int1: i32,
+        string1: String,
+    }
+
+    #[test]
+    fn test_read_table_data() {
+        let filename = "tests/data/table_with_rows.wt";
+        if Path::new(filename).exists() {
+            remove_file(filename).unwrap();
+        }
+        let mut file: std::fs::File = std::fs::File::create(filename).unwrap();
+
+        let space_info_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 0.into(),
+            previous_id: 0.into(),
+            next_id: 1.into(),
+            page_type: PageType::SpaceInfo,
+            data_length: 0u32,
+        };
+        let space_info = SpaceInfoData {
+            id: 1.into(),
+            page_count: 4,
+            name: "test space".to_owned(),
+            row_schema: vec![
+                ("int1".to_string(), "i32".to_string()),
+                ("string1".to_string(), "String".to_string()),
+            ],
+            primary_key_fields: vec!["int1".to_string()],
+            primary_key_intervals: vec![Interval(1, 3)],
+            secondary_index_types: vec![],
+            secondary_index_intervals: Default::default(),
+            data_intervals: vec![],
+            pk_gen_state: (),
+            empty_links_list: vec![],
+        };
+        let mut space_info_page = GeneralPage {
+            header: space_info_header,
+            inner: space_info
+        };
+        persist_page(&mut space_info_page, &mut file).unwrap();
+
+        let index1_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 1.into(),
+            previous_id: 0.into(),
+            next_id: 2.into(),
+            page_type: PageType::Index,
+            data_length: 0,
+        };
+
+        let index2_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 2.into(),
+            previous_id: 0.into(),
+            next_id: 3.into(),
+            page_type: PageType::Index,
+            data_length: 0,
+        };
+
+        let data1_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 3.into(),
+            previous_id: 2.into(),
+            next_id: 4.into(),
+            page_type: PageType::Data,
+            data_length: 0,
+        };
+
+        let data1_row1 = TableStruct {
+            int1: 1,
+            string1: "first string".to_string(),
+        };
+
+        let data1_row2 = TableStruct {
+            int1: 2,
+            string1: "second string".to_string(),
+        };
+
+        let data1_inner = rkyv::to_bytes::<rkyv::rancor::Error>(&data1_row1).unwrap();
+        let data2_inner = rkyv::to_bytes::<rkyv::rancor::Error>(&data1_row2).unwrap();
+
+        let data2_header = GeneralHeader {
+            data_version: DATA_VERSION,
+            space_id: 1.into(),
+            page_id: 4.into(),
+            previous_id: 3.into(),
+            next_id: 5.into(),
+            page_type: PageType::Data,
+            data_length: 0,
+        };
+
+        let index_data: IndexData<i32> = IndexData {
+            index_values: vec![
+                IndexValue {
+                    key: 0,
+                    link: Link {
+                        page_id: 2.into(),
+                        offset: 0,
+                        length: archived_page.len(),
+                    }
+                }
+            ]
+        };
     }
 }
