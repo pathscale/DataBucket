@@ -11,9 +11,7 @@ use crate::page::ty::PageType;
 use crate::page::General;
 use crate::persistence::data::rkyv_data::parse_archived_row;
 use crate::persistence::data::DataTypeValue;
-use crate::{
-    space, DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE,
-};
+use crate::{DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 pub fn map_index_pages_to_general<T>(
     pages: Vec<IndexData<T>>,
@@ -298,7 +296,7 @@ mod test {
         Interval, Link, PageType, SpaceInfoData, DATA_VERSION, PAGE_SIZE,
     };
 
-    use super::{persist_page, read_index_pages};
+    use super::persist_page;
 
     #[test]
     fn test_map() {

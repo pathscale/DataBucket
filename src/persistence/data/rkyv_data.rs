@@ -37,7 +37,7 @@ pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
 #[cfg(test)]
 mod test {
     use super::parse_archived_row;
-    use crate::persistence::data::{self, types::DataTypeValue};
+    use crate::persistence::data::types::DataTypeValue;
     use rkyv::{Archive, Deserialize, Serialize};
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
