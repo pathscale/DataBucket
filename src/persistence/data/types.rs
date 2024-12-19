@@ -110,8 +110,16 @@ macro_rules! impl_datatype {
                 $datatype_value(unsafe { (*archived_ptr) }.into())
             }
 
-            fn advance_pointer_for_padding(&self, pointer: &mut *const u8, start_pointer: *const u8) {
-                *pointer = advance_pointer_for_padding(*pointer, start_pointer, size_of::<$archived_datatype>());
+            fn advance_pointer_for_padding(
+                &self,
+                pointer: &mut *const u8,
+                start_pointer: *const u8,
+            ) {
+                *pointer = advance_pointer_for_padding(
+                    *pointer,
+                    start_pointer,
+                    size_of::<$archived_datatype>(),
+                );
             }
 
             fn advance_pointer(&self, pointer: &mut *const u8) {

@@ -1,5 +1,5 @@
 use crate::persistence::data::types::DataTypeValue;
-use std::{os::unix::net::UnixDatagram, str::FromStr};
+use std::str::FromStr;
 
 pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
     buf: &[u8],
@@ -58,7 +58,6 @@ mod test {
         )
     }
 
-
     #[derive(Archive, Serialize, Deserialize, Debug)]
     struct Struct2 {
         pub int1: i32,
@@ -66,15 +65,9 @@ mod test {
 
     #[test]
     fn test_parse_archived_row_int() {
-        let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct2 {
-            int1: 3,
-        })
-        .unwrap();
+        let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct2 { int1: 3 }).unwrap();
         let parsed = parse_archived_row(&buffer, &vec![("int1", "i32")]);
-        assert_eq!(
-            parsed,
-            [DataTypeValue::I32(3)]
-        )
+        assert_eq!(parsed, [DataTypeValue::I32(3)])
     }
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
@@ -89,10 +82,7 @@ mod test {
         })
         .unwrap();
         let parsed = parse_archived_row(&buffer, &vec![("float1", "f64")]);
-        assert_eq!(
-            parsed,
-            [DataTypeValue::F64(3.14159265358)]
-        )
+        assert_eq!(parsed, [DataTypeValue::F64(3.14159265358)])
     }
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
