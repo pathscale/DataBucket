@@ -152,6 +152,31 @@ where
     })
 }
 
+pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
+    file: &mut std::fs::File,
+    index: u32,
+) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+    seek_to_page_start(file, index)?;
+    let header = parse_general_header(file)?;
+
+    let mut buffer = [0u8; INNER_PAGE_SIZE];
+    if header.next_id == 0.into() {
+        file.read(&mut buffer)?;
+    } else {
+        file.read_exact(&mut buffer)?;
+    }
+
+    let data = DataPage {
+        data: buffer,
+        length: header.data_length,
+    };
+
+    Ok(GeneralPage {
+        header,
+        inner: data,
+    })
+}
+
 pub fn parse_data_record<const PAGE_SIZE: usize>(
     file: &mut std::fs::File,
     index: u32,
