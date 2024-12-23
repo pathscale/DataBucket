@@ -20,3 +20,9 @@ where
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
+
+impl Persistable for u8 {
+    fn as_bytes(&self) -> impl AsRef<[u8]> {
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+    }
+}

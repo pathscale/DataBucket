@@ -238,7 +238,7 @@ where
     Ok(result)
 }
 
-fn read_data_pages<const PAGE_SIZE: usize>(
+pub fn read_data_pages<const PAGE_SIZE: usize>(
     mut file: &mut std::fs::File,
 ) -> eyre::Result<Vec<Vec<DataTypeValue>>> {
     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
@@ -256,7 +256,7 @@ fn read_data_pages<const PAGE_SIZE: usize>(
         .collect::<Vec<&String>>()[0]
         .as_str();
     let links = match primary_key_type {
-        "i64" => read_index_pages::<i64, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
+        "i32" => read_index_pages::<i32, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
             .iter()
             .map(|index_page| &index_page.index_values)
             .flatten()
@@ -292,9 +292,11 @@ mod test {
     use crate::page::index::IndexValue;
     use crate::page::util::read_secondary_index_pages;
     use crate::page::INNER_PAGE_SIZE;
+    use crate::persistence::data::DataTypeValue;
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, GeneralHeader, GeneralPage, IndexData,
-        Interval, Link, PageType, SpaceInfoData, DATA_VERSION, PAGE_SIZE,
+        map_index_pages_to_general, map_unique_tree_index, read_data_pages, DataPage, GeneralHeader, GeneralPage,
+        IndexData, Interval, Link, PageType, SpaceInfoData, DATA_VERSION, GENERAL_HEADER_SIZE,
+        PAGE_SIZE,
     };
 
     use super::persist_page;
@@ -457,6 +459,7 @@ mod test {
 
     #[test]
     fn test_read_table_data() {
+        // create a test database manually
         let filename = "tests/data/table_with_rows.wt";
         if Path::new(filename).exists() {
             remove_file(filename).unwrap();
@@ -490,11 +493,11 @@ mod test {
         };
         let mut space_info_page = GeneralPage {
             header: space_info_header,
-            inner: space_info
+            inner: space_info,
         };
         persist_page(&mut space_info_page, &mut file).unwrap();
 
-        let index1_header = GeneralHeader {
+        let index_header = GeneralHeader {
             data_version: DATA_VERSION,
             space_id: 1.into(),
             page_id: 1.into(),
@@ -504,60 +507,75 @@ mod test {
             data_length: 0,
         };
 
-        let index2_header = GeneralHeader {
+        let data_header = GeneralHeader {
             data_version: DATA_VERSION,
             space_id: 1.into(),
             page_id: 2.into(),
-            previous_id: 0.into(),
-            next_id: 3.into(),
-            page_type: PageType::Index,
-            data_length: 0,
-        };
-
-        let data1_header = GeneralHeader {
-            data_version: DATA_VERSION,
-            space_id: 1.into(),
-            page_id: 3.into(),
             previous_id: 2.into(),
             next_id: 4.into(),
             page_type: PageType::Data,
             data_length: 0,
         };
 
-        let data1_row1 = TableStruct {
+        let data_row1 = TableStruct {
             int1: 1,
             string1: "first string".to_string(),
         };
 
-        let data1_row2 = TableStruct {
+        let data_row2 = TableStruct {
             int1: 2,
             string1: "second string".to_string(),
         };
 
-        let data1_inner = rkyv::to_bytes::<rkyv::rancor::Error>(&data1_row1).unwrap();
-        let data2_inner = rkyv::to_bytes::<rkyv::rancor::Error>(&data1_row2).unwrap();
+        let data_row1_inner = rkyv::to_bytes::<rkyv::rancor::Error>(&data_row1).unwrap();
+        let data_row1_offset = GENERAL_HEADER_SIZE;
+        let data_row1_length = data_row1_inner.len();
 
-        let data2_header = GeneralHeader {
-            data_version: DATA_VERSION,
-            space_id: 1.into(),
-            page_id: 4.into(),
-            previous_id: 3.into(),
-            next_id: 5.into(),
-            page_type: PageType::Data,
-            data_length: 0,
+        let data_row2_inner = rkyv::to_bytes::<rkyv::rancor::Error>(&data_row2).unwrap();
+        let data_row2_offset = data_row1_offset + data_row1_length;
+        let data_row2_length = data_row2_inner.len();
+
+        let data_rows12_buffer = [data_row1_inner, data_row2_inner].concat();
+
+        let mut data_page = GeneralPage::<Vec<u8>> {
+            header: data_header,
+            inner: data_rows12_buffer,
         };
 
-        let index_data: IndexData<i32> = IndexData {
+        let index_data: IndexData<i32> = IndexData::<i32> {
             index_values: vec![
-                IndexValue {
-                    key: 0,
+                IndexValue::<i32> {
+                    key: 1,
                     link: Link {
-                        page_id: 2.into(),
-                        offset: 0,
-                        length: archived_page.len(),
-                    }
-                }
-            ]
+                        page_id: data_header.page_id,
+                        offset: data_row1_offset as u32,
+                        length: data_row1_length as u32,
+                    },
+                },
+                IndexValue::<i32> {
+                    key: 2,
+                    link: Link {
+                        page_id: data_header.page_id,
+                        offset: data_row2_offset as u32,
+                        length: data_row2_length as u32,
+                    },
+                },
+            ],
         };
+        let mut index_page = GeneralPage {
+            header: index_header,
+            inner: index_data,
+        };
+
+        persist_page(&mut index_page, &mut file).unwrap();
+        persist_page(&mut data_page, &mut file).unwrap();
+
+        // read the data from the database
+        let mut file: std::fs::File = std::fs::File::open(filename).unwrap();
+        // let data_pages = read_data_pages::<PAGE_SIZE>(&mut file).unwrap();
+        // assert_eq!(data_pages[0][0], DataTypeValue::I32(1));
+        // assert_eq!(data_pages[0][1], DataTypeValue::String("first string".to_string()));
+        // assert_eq!(data_pages[1][0], DataTypeValue::I32(2));
+        // assert_eq!(data_pages[1][1], DataTypeValue::String("second string".to_string()));
     }
 }
