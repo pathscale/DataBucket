@@ -607,8 +607,14 @@ mod test {
         let mut file: std::fs::File = std::fs::File::open(filename).unwrap();
         let data_pages: Vec<Vec<DataTypeValue>> = read_data_pages::<PAGE_SIZE>(&mut file).unwrap();
         assert_eq!(data_pages[0][0], DataTypeValue::I32(1));
-        assert_eq!(data_pages[0][1], DataTypeValue::String("first string".to_string()));
+        assert_eq!(
+            data_pages[0][1],
+            DataTypeValue::String("first string".to_string())
+        );
         assert_eq!(data_pages[1][0], DataTypeValue::I32(2));
-        assert_eq!(data_pages[1][1], DataTypeValue::String("second string".to_string()));
+        assert_eq!(
+            data_pages[1][1],
+            DataTypeValue::String("second string".to_string())
+        );
     }
 }
