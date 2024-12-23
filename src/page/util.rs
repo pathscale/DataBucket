@@ -135,6 +135,7 @@ pub fn parse_data_record<const PAGE_SIZE: usize>(
     }
     file.seek(io::SeekFrom::Current(offset as i64))?;
     let mut buffer = vec![0u8; length as usize];
+    file.read_exact(&mut buffer)?;
 
     let parsed_record = parse_archived_row(&buffer, &schema);
 
@@ -482,7 +483,7 @@ mod test {
                 ("string1".to_string(), "String".to_string()),
             ],
             primary_key_fields: vec!["int1".to_string()],
-            primary_key_intervals: vec![Interval(1, 3)],
+            primary_key_intervals: vec![Interval(1, 2)],
             secondary_index_types: vec![],
             secondary_index_intervals: Default::default(),
             data_intervals: vec![],
@@ -571,9 +572,9 @@ mod test {
         // read the data from the database
         let mut file: std::fs::File = std::fs::File::open(filename).unwrap();
         let data_pages: Vec<Vec<DataTypeValue>> = read_data_pages::<PAGE_SIZE>(&mut file).unwrap();
-        // assert_eq!(data_pages[0][0], DataTypeValue::I32(1));
-        // assert_eq!(data_pages[0][1], DataTypeValue::String("first string".to_string()));
-        // assert_eq!(data_pages[1][0], DataTypeValue::I32(2));
-        // assert_eq!(data_pages[1][1], DataTypeValue::String("second string".to_string()));
+        assert_eq!(data_pages[0][0], DataTypeValue::I32(1));
+        assert_eq!(data_pages[0][1], DataTypeValue::String("first string".to_string()));
+        assert_eq!(data_pages[1][0], DataTypeValue::I32(2));
+        assert_eq!(data_pages[1][1], DataTypeValue::String("second string".to_string()));
     }
 }
