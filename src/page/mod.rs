@@ -14,8 +14,9 @@ pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
-    map_data_pages_to_general, map_index_pages_to_general, parse_index_page, parse_page, parse_data_page,
-    persist_page, read_data_pages, read_index_pages, seek_by_link, seek_to_page_start, update_at,
+    map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
+    parse_page, persist_page, read_data_pages, read_index_pages, read_rows_schema, seek_by_link,
+    seek_to_page_start, update_at,
 };
 
 // TODO: Move to config
