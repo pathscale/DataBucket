@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use derive_more::derive::Display;
 use derive_more::From;
 use rkyv::primitive::{
     ArchivedF32, ArchivedF64, ArchivedI128, ArchivedI16, ArchivedI32, ArchivedI64, ArchivedU128,
@@ -10,7 +11,7 @@ use rkyv::string::ArchivedString;
 use crate::persistence::data::util::{advance_accum_for_padding, advance_pointer_for_padding};
 use crate::persistence::data::DataType;
 
-#[derive(Debug, From, PartialEq)]
+#[derive(Debug, Display,From, PartialEq)]
 pub enum DataTypeValue {
     String(String),
     I128(i128),
