@@ -298,11 +298,23 @@ where
     Ok(result)
 }
 
-fn read_links<DataType, const PAGE_SIZE: usize> (mut file: &mut std::fs::File, space_info: &SpaceInfo) -> eyre::Result<Vec<Link>> {
-    Ok(read_index_pages::<i32, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
-        .iter()
-        .map(|index_value| index_value.link)
-        .collect::<Vec<Link>>())
+fn read_links<DataType, const PAGE_SIZE: usize>(
+    mut file: &mut std::fs::File,
+    space_info: &SpaceInfo,
+) -> eyre::Result<Vec<Link>> {
+    Ok(
+        read_index_pages::<i32, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
+            .iter()
+            .map(|index_value| index_value.link)
+            .collect::<Vec<Link>>(),
+    )
+}
+
+pub fn read_rows_schema<const PAGE_SIZE: usize>(
+    mut file: &mut std::fs::File,
+) -> eyre::Result<Vec<(String, String)>> {
+    let space_info = parse_space_info::<PAGE_SIZE>(file)?;
+    Ok(space_info.row_schema)
 }
 
 pub fn read_data_pages<const PAGE_SIZE: usize>(
