@@ -271,7 +271,7 @@ where
 
     let mut result: Vec<IndexValue<T>> = vec![];
     for interval in intervals.iter() {
-        for index in interval.0..interval.1 {
+        for index in interval.0..=interval.1 {
             let mut index_records = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
             result.append(&mut index_records);
         }
@@ -290,7 +290,7 @@ where
 {
     let mut result: Vec<IndexValue<T>> = vec![];
     for interval in intervals.iter() {
-        for index in interval.0..interval.1 {
+        for index in interval.0..=interval.1 {
             let mut index_records = parse_index_page::<T, PAGE_SIZE>(file, index as u32)?;
             result.append(&mut index_records);
         }
@@ -460,7 +460,7 @@ mod test {
         let mut index_pages = Vec::<GeneralPage<IndexData<String>>>::new();
 
         for interval in intervals {
-            for index in interval.0..interval.1 {
+            for index in interval.0..=interval.1 {
                 let index_header = GeneralHeader {
                     data_version: DATA_VERSION,
                     space_id: 1.into(),
@@ -499,7 +499,7 @@ mod test {
         }
         let mut file: std::fs::File = std::fs::File::create(filename).unwrap();
 
-        let intervals = vec![Interval(1, 3), Interval(5, 8)];
+        let intervals = vec![Interval(1, 2), Interval(5, 7)];
 
         // create the space page
         let mut space_info_page = create_space_with_intervals(&intervals);
@@ -558,7 +558,7 @@ mod test {
                 ("string1".to_string(), "String".to_string()),
             ],
             primary_key_fields: vec!["int1".to_string()],
-            primary_key_intervals: vec![Interval(1, 2)],
+            primary_key_intervals: vec![Interval(1, 1)],
             secondary_index_types: vec![],
             secondary_index_intervals: Default::default(),
             data_intervals: vec![],
