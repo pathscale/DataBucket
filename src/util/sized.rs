@@ -1,5 +1,5 @@
 use crate::link::{Link, LINK_LENGTH};
-use std::mem;
+use std::{mem, sync::Arc};
 use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
@@ -43,16 +43,37 @@ impl SizeMeasurable for Uuid {
     }
 }
 
+impl SizeMeasurable for [u8; 32] {
+    fn aligned_size(&self) -> usize {
+        mem::size_of::<[u8; 32]>()
+    }
+}
+
+impl SizeMeasurable for [u8; 20] {
+    fn aligned_size(&self) -> usize {
+        mem::size_of::<[u8; 20]>()
+    }
+}
+
 // That was found on practice... Check unit test for proofs that works.
 impl SizeMeasurable for String {
     fn aligned_size(&self) -> usize {
-        if self.len() < 8 {
+        if self.len() <= 8 {
             8
-        } else if self.len() == 8 {
-            16
         } else {
             align(self.len() + 8)
         }
+    }
+}
+
+impl<T: SizeMeasurable> SizeMeasurable for Arc<T> {
+    fn aligned_size(&self) -> usize {
+        self.as_ref().aligned_size()
+    }
+}
+impl<T: SizeMeasurable> SizeMeasurable for lockfree::set::Set<T> {
+    fn aligned_size(&self) -> usize {
+        self.iter().map(|elem| elem.aligned_size()).sum()
     }
 }
 
@@ -65,7 +86,10 @@ mod test {
         // Test if approximate size is correct for strings
         for i in 0..10_000 {
             let s = String::from_utf8(vec![b'a'; i]).unwrap();
-            assert_eq!(s.aligned_size(), rkyv::to_bytes::<_, 0>(&s).unwrap().len())
+            assert_eq!(
+                s.aligned_size(),
+                rkyv::to_bytes::<rkyv::rancor::Error>(&s).unwrap().len()
+            )
         }
     }
 }

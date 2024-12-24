@@ -1,5 +1,4 @@
 mod data;
-mod data_type;
 mod header;
 mod index;
 mod space_info;
@@ -10,14 +9,13 @@ use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub use data::Data;
-pub use data_type::DataType;
 pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
-    map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
-    parse_page, persist_page, read_index_pages, load_pages,
+    map_data_pages_to_general, map_index_pages_to_general, parse_index_page, parse_page, parse_data_page,
+    persist_page, read_data_pages, read_index_pages, seek_by_link, seek_to_page_start, update_at,
 };
 
 // TODO: Move to config
@@ -53,6 +51,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     Clone,
     Deserialize,
     Debug,
+    Default,
     Display,
     Eq,
     From,
@@ -106,7 +105,7 @@ mod tests {
     #[test]
     fn general_header_length_valid() {
         let header = get_general_header();
-        let bytes = rkyv::to_bytes::<_, 32>(&header).unwrap();
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&header).unwrap();
 
         assert_eq!(bytes.len(), GENERAL_HEADER_SIZE)
     }
