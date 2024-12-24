@@ -298,11 +298,18 @@ where
     Ok(result)
 }
 
+fn read_links<DataType, const PAGE_SIZE: usize> (mut file: &mut std::fs::File, space_info: &SpaceInfo) -> eyre::Result<Vec<Link>> {
+    Ok(read_index_pages::<i32, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
+        .iter()
+        .map(|index_value| index_value.link)
+        .collect::<Vec<Link>>())
+}
+
 pub fn read_data_pages<const PAGE_SIZE: usize>(
     mut file: &mut std::fs::File,
 ) -> eyre::Result<Vec<Vec<DataTypeValue>>> {
     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
-    let primary_key_fields = space_info.primary_key_fields;
+    let primary_key_fields = &space_info.primary_key_fields;
     if primary_key_fields.len() != 1 {
         panic!("Currently only single primary key is supported");
     }
@@ -316,10 +323,19 @@ pub fn read_data_pages<const PAGE_SIZE: usize>(
         .collect::<Vec<&String>>()[0]
         .as_str();
     let links = match primary_key_type {
-        "i32" => read_index_pages::<i32, PAGE_SIZE>(&mut file, &space_info.primary_key_intervals)?
-            .iter()
-            .map(|index_value| index_value.link)
-            .collect::<Vec<Link>>(),
+        "String" => read_links::<String, PAGE_SIZE>(&mut file, &space_info)?,
+        "i128" => read_links::<i128, PAGE_SIZE>(&mut file, &space_info)?,
+        "i64" => read_links::<i64, PAGE_SIZE>(&mut file, &space_info)?,
+        "i32" => read_links::<i32, PAGE_SIZE>(&mut file, &space_info)?,
+        "i16" => read_links::<i16, PAGE_SIZE>(&mut file, &space_info)?,
+        "i8" => read_links::<i8, PAGE_SIZE>(&mut file, &space_info)?,
+        "u128" => read_links::<u128, PAGE_SIZE>(&mut file, &space_info)?,
+        "u64" => read_links::<u64, PAGE_SIZE>(&mut file, &space_info)?,
+        "u32" => read_links::<u32, PAGE_SIZE>(&mut file, &space_info)?,
+        "u16" => read_links::<u16, PAGE_SIZE>(&mut file, &space_info)?,
+        "u8" => read_links::<u8, PAGE_SIZE>(&mut file, &space_info)?,
+        "f64" => read_links::<f64, PAGE_SIZE>(&mut file, &space_info)?,
+        "f32" => read_links::<f32, PAGE_SIZE>(&mut file, &space_info)?,
         _ => panic!("Unsupported primary key data type `{}`", primary_key_type),
     };
 
