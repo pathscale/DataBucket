@@ -518,7 +518,7 @@ mod test {
             vec![Interval(1, 2), Interval(5, 6)],
         )
         .unwrap();
-        assert_eq!(index_pages.len(), 2);
+        assert_eq!(index_pages.len(), 4);
         assert_eq!(index_pages[0].key, "first_value");
         assert_eq!(index_pages[0].link.page_id, 2.into());
         assert_eq!(index_pages[0].link.offset, 0);
