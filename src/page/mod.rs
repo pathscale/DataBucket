@@ -1,10 +1,10 @@
 mod data;
 mod header;
 mod index;
+mod iterators;
 mod space_info;
 mod ty;
 mod util;
-
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
 
