@@ -165,7 +165,7 @@ impl Iterator for DataIterator<'_> {
 #[cfg(test)]
 mod test {
     use crate::{
-        page::{self, iterators::DataIterator, util::parse_space_info, PageId}, persistence::data::DataTypeValue, Interval, Link, PAGE_SIZE
+        page::{iterators::DataIterator, util::parse_space_info, PageId}, persistence::data::DataTypeValue, Interval, Link, PAGE_SIZE
     };
 
     use super::{LinksIterator, PageIterator};
