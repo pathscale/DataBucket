@@ -11,7 +11,7 @@ use rkyv::string::ArchivedString;
 use crate::persistence::data::util::{advance_accum_for_padding, advance_pointer_for_padding};
 use crate::persistence::data::DataType;
 
-#[derive(Debug, Display,From, PartialEq)]
+#[derive(Debug, Display, From, PartialEq)]
 pub enum DataTypeValue {
     String(String),
     I128(i128),
