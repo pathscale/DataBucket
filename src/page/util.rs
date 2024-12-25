@@ -77,16 +77,13 @@ where
 }
 
 pub fn seek_to_page_start(file: &mut std::fs::File, index: u32) -> eyre::Result<()> {
-    let current_position: u64 = file.stream_position()?;
-    let start_pos = index as i64 * PAGE_SIZE as i64;
-    file.seek(io::SeekFrom::Current(start_pos - current_position as i64))?;
+    file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
 
     Ok(())
 }
 
 pub fn seek_by_link(file: &mut std::fs::File, link: Link) -> eyre::Result<()> {
-    seek_to_page_start(file, link.page_id.0)?;
-    file.seek(io::SeekFrom::Current(link.offset as i64))?;
+    file.seek(io::SeekFrom::Start(link.page_id.0 as u64 * PAGE_SIZE as u64 + GENERAL_HEADER_SIZE as u64 + link.offset as u64))?;
 
     Ok(())
 }
