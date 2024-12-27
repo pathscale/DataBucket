@@ -86,7 +86,7 @@ fn main() -> eyre::Result<()> {
 
     let header: Vec<String> = row_schema
         .iter()
-        .map(|(column, data_type)| column.to_owned())
+        .map(|(column, _data_type)| column.to_owned())
         .collect();
     let rows: Vec<Vec<String>> = rows
         .iter()
