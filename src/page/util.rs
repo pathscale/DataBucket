@@ -83,7 +83,9 @@ pub fn seek_to_page_start(file: &mut std::fs::File, index: u32) -> eyre::Result<
 }
 
 pub fn seek_by_link(file: &mut std::fs::File, link: Link) -> eyre::Result<()> {
-    file.seek(io::SeekFrom::Start(link.page_id.0 as u64 * PAGE_SIZE as u64 + GENERAL_HEADER_SIZE as u64 + link.offset as u64))?;
+    file.seek(io::SeekFrom::Start(
+        link.page_id.0 as u64 * PAGE_SIZE as u64 + GENERAL_HEADER_SIZE as u64 + link.offset as u64,
+    ))?;
 
     Ok(())
 }
