@@ -1,5 +1,9 @@
 use clap::Parser;
-use data_bucket::{persistence::data::DataTypeValue, read_data_pages, read_rows_schema, PAGE_SIZE};
+use data_bucket::{
+    page::{parse_space_info, DataIterator, LinksIterator, PageIterator},
+    persistence::data::DataTypeValue,
+    read_data_pages, read_rows_schema, space, PAGE_SIZE,
+};
 use std::{fs::File, str};
 
 #[derive(Parser, Debug)]
@@ -65,14 +69,32 @@ fn main() -> eyre::Result<()> {
     let args = Args::parse();
     let mut file = File::open(args.filename)?;
 
-    let row_schema = read_rows_schema::<PAGE_SIZE>(&mut file)?;
+    let space_info = parse_space_info::<PAGE_SIZE>(&mut file)?;
+    let row_schema = space_info.row_schema.clone();
+
+    let mut rows: Vec<Vec<DataTypeValue>> = vec![];
+
+    let pages = PageIterator::new(space_info.primary_key_intervals.clone());
+    for page in pages {
+        let links = LinksIterator::new(&mut file, page, &space_info).collect::<Vec<_>>();
+        for row in DataIterator::new(&mut file, row_schema.clone(), links) {
+            rows.push(row);
+        }
+    }
+
     let rows: Vec<Vec<DataTypeValue>> = read_data_pages::<PAGE_SIZE>(&mut file)?;
 
-    let header: Vec<String> = row_schema.iter()
+    let header: Vec<String> = row_schema
+        .iter()
         .map(|(column, data_type)| column.to_owned())
         .collect();
-    let rows: Vec<Vec<String>> = rows.iter()
-        .map(|row| row.iter().map(|column| column.to_string()).collect::<Vec<String>>())
+    let rows: Vec<Vec<String>> = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|column| column.to_string())
+                .collect::<Vec<String>>()
+        })
         .collect();
 
     format_table(&header, &rows);
