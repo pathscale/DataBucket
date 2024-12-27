@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use rkyv::{api::high::HighDeserializer, primitive, Archive};
+use rkyv::{api::high::HighDeserializer, de::Pool, primitive, rancor::Strategy, Archive, DeserializeUnsized};
 
 use crate::{
     page::util::parse_general_header,
@@ -8,7 +8,7 @@ use crate::{
     IndexData, Link,
 };
 
-use super::{index::IndexValue, seek_by_link, seek_to_page_start, Interval, SpaceInfo};
+use super::{index::{ArchivedIndexValue, IndexValue}, seek_by_link, seek_to_page_start, Interval, SpaceInfo};
 
 pub struct PageIterator {
     intervals: Vec<Interval>,
@@ -92,7 +92,25 @@ impl<'a> LinksIterator<'a> {
     }
 }
 
-fn parse_index_records<T>(buffer: &[u8]) {}
+fn parse_links<T>(buffer: &[u8]) -> Vec<Link>
+where T: Archive,
+    [ArchivedIndexValue<T>]: DeserializeUnsized<[IndexValue<T>], Strategy<Pool, rkyv::rancor::Error>>
+{
+    let archived = unsafe {
+        rkyv::access_unchecked::<<IndexData<T> as Archive>::Archived>(
+            &buffer[..],
+        )
+    };
+    let index_records =
+        rkyv::deserialize::<IndexData<T>, rkyv::rancor::Error>(archived)
+            .expect("data should be valid")
+            .index_values;
+
+    index_records
+        .iter()
+        .map(|index_value| index_value.link)
+        .collect::<Vec<_>>()
+}
 
 impl Iterator for LinksIterator<'_> {
     type Item = Link;
@@ -108,194 +126,19 @@ impl Iterator for LinksIterator<'_> {
                 .expect("index data should be readable");
 
             self.links = Some(match self.primary_key_type.as_str() {
-                "String" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<String> as Archive>::Archived>(
-                            &buffer[..],
-                        )
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<String>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "i128" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<i128> as Archive>::Archived>(
-                            &buffer[..],
-                        )
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<i128>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "i64" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<i64> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<i64>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "i32" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<i32> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<i32>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "i16" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<i16> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<i16>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "i8" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<i8> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<i8>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "u128" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<u128> as Archive>::Archived>(
-                            &buffer[..],
-                        )
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<u128>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "u64" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<u64> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<u64>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "u32" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<u32> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<u32>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "u16" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<u16> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<u16>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "u8" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<u8> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<u8>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "f64" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<f64> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<f64>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
-                "f32" => {
-                    let archived = unsafe {
-                        rkyv::access_unchecked::<<IndexData<f32> as Archive>::Archived>(&buffer[..])
-                    };
-                    let index_records =
-                        rkyv::deserialize::<IndexData<f32>, rkyv::rancor::Error>(archived)
-                            .expect("data should be valid")
-                            .index_values;
-
-                    index_records
-                        .iter()
-                        .map(|index_value| index_value.link)
-                        .collect::<Vec<_>>()
-                }
+                "String" => parse_links::<String>(&buffer),
+                "i128" => parse_links::<i128>(&buffer),
+                "i64" => parse_links::<i64>(&buffer),
+                "i32" => parse_links::<i32>(&buffer),
+                "i16" => parse_links::<i16>(&buffer),
+                "i8" => parse_links::<i8>(&buffer),
+                "u128" => parse_links::<u128>(&buffer),
+                "u64" => parse_links::<u64>(&buffer),
+                "u32" => parse_links::<u32>(&buffer),
+                "u16" => parse_links::<u16>(&buffer),
+                "u8" => parse_links::<u8>(&buffer),
+                "f64" => parse_links::<f64>(&buffer),
+                "f32" => parse_links::<f32>(&buffer),
                 _ => panic!(
                     "Unsupported primary key data type `{}`",
                     self.primary_key_type
