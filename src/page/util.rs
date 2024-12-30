@@ -14,12 +14,21 @@ use crate::persistence::data::rkyv_data::parse_archived_row;
 use crate::persistence::data::DataTypeValue;
 use crate::{DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
-pub fn map_index_pages_to_general<T>(
-    pages: Vec<IndexData<T>>,
-    header: &mut GeneralHeader,
-) -> Vec<General<IndexData<T>>> {
-    let mut previous_header = header;
+use super::{Interval, SpaceInfo};
+
+pub fn map_index_pages_to_general<T>(pages: Vec<IndexData<T>>) -> Vec<General<IndexData<T>>> {
+    let mut header = &mut GeneralHeader::new(0.into(), PageType::Index, 0.into());
     let mut general_pages = vec![];
+
+    let mut pages = pages.into_iter();
+    if let Some(p) = pages.next() {
+        let general = General {
+            header: header.clone(),
+            inner: p,
+        };
+        general_pages.push(general);
+    }
+    let mut previous_header = header;
 
     for p in pages {
         let general = General {
@@ -36,10 +45,19 @@ pub fn map_index_pages_to_general<T>(
 
 pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     pages: Vec<DataPage<DATA_LENGTH>>,
-    header: &mut GeneralHeader,
 ) -> Vec<General<DataPage<DATA_LENGTH>>> {
-    let mut previous_header = header;
+    let mut header = &mut GeneralHeader::new(0.into(), PageType::Data, 0.into());
     let mut general_pages = vec![];
+
+    let mut pages = pages.into_iter();
+    if let Some(p) = pages.next() {
+        let general = General {
+            header: header.clone(),
+            inner: p,
+        };
+        general_pages.push(general);
+    }
+    let mut previous_header = header;
 
     for p in pages {
         let general = General {
@@ -113,7 +131,7 @@ pub fn update_at<const DATA_LENGTH: usize>(
     }
 
     seek_by_link(file, link)?;
-    file.write_all(new_data)?;
+    file.write(new_data)?;
     Ok(())
 }
 
@@ -409,19 +427,19 @@ pub mod test {
             page_type: PageType::SpaceInfo,
             data_length: PAGE_SIZE as u32,
         };
-        let generalised = map_index_pages_to_general(res, &mut header);
+        let generalised = map_index_pages_to_general(res);
         assert_eq!(generalised.len(), 3);
         let first = generalised.get(0).unwrap().header;
         let second = generalised.get(1).unwrap().header;
         let third = generalised.get(2).unwrap().header;
 
-        assert_eq!(header.next_id, first.page_id);
+        assert_eq!(first.page_id, header.page_id);
         assert_eq!(first.space_id, header.space_id);
-        assert_eq!(first.previous_id, header.page_id);
-        assert_eq!(first.next_id, second.page_id);
+        assert_eq!(first.previous_id, header.previous_id);
+        assert_eq!(first.next_id, header.next_id);
         assert_eq!(first.page_type, PageType::Index);
 
-        assert_eq!(first.next_id, second.page_id);
+        assert_eq!(first.next_id, header.page_id);
         assert_eq!(second.space_id, header.space_id);
         assert_eq!(second.previous_id, first.page_id);
         assert_eq!(second.next_id, third.page_id);
