@@ -310,7 +310,7 @@ fn read_links<DataType, const PAGE_SIZE: usize>(
 }
 
 pub fn read_rows_schema<const PAGE_SIZE: usize>(
-    mut file: &mut std::fs::File,
+    file: &mut std::fs::File,
 ) -> eyre::Result<Vec<(String, String)>> {
     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
     Ok(space_info.row_schema)
@@ -379,9 +379,9 @@ pub mod test {
     use crate::page::INNER_PAGE_SIZE;
     use crate::persistence::data::DataTypeValue;
     use crate::{
-        map_index_pages_to_general, map_unique_tree_index, read_data_pages, DataPage,
+        map_index_pages_to_general, map_unique_tree_index, read_data_pages,
         GeneralHeader, GeneralPage, IndexData, Interval, Link, PageType, SpaceInfoData,
-        DATA_VERSION, GENERAL_HEADER_SIZE, PAGE_SIZE,
+        DATA_VERSION, PAGE_SIZE,
     };
 
     use super::persist_page;

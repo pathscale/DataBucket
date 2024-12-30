@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use rkyv::{api::high::HighDeserializer, de::Pool, primitive, rancor::Strategy, Archive, DeserializeUnsized};
+use rkyv::{de::Pool, rancor::Strategy, Archive, DeserializeUnsized};
 
 use crate::{
     page::util::parse_general_header,
