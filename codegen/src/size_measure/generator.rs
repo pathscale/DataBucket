@@ -7,7 +7,7 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn gen_impl(&self) -> syn::Result<TokenStream> {
+    pub fn gen_impl(&self) -> TokenStream {
         let struct_ident = &self.struct_def.ident;
 
         let mut num = -1;
@@ -29,13 +29,13 @@ impl Generator {
             })
             .collect::<Vec<_>>();
 
-        Ok(quote! {
+        quote! {
             impl SizeMeasurable for #struct_ident {
                 fn aligned_size(&self) -> usize {
                     let len = #(#sum+)* 0;
                     align(len)
                 }
             }
-        })
+        }
     }
 }
