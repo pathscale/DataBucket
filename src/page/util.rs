@@ -14,8 +14,6 @@ use crate::persistence::data::rkyv_data::parse_archived_row;
 use crate::persistence::data::DataTypeValue;
 use crate::{DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
-use super::{Interval, SpaceInfo};
-
 pub fn map_index_pages_to_general<T>(pages: Vec<IndexData<T>>) -> Vec<General<IndexData<T>>> {
     let mut header = &mut GeneralHeader::new(0.into(), PageType::Index, 0.into());
     let mut general_pages = vec![];
