@@ -319,7 +319,7 @@ mod test {
         let second = generalised.get(1).unwrap().header;
         let third = generalised.get(2).unwrap().header;
 
-        assert_eq!(first.page_id, header.page_id);
+        assert_eq!(first.page_id, 1.into());
         assert_eq!(first.space_id, header.space_id);
         assert_eq!(first.previous_id, header.previous_id);
         assert_eq!(first.next_id, header.next_id);
