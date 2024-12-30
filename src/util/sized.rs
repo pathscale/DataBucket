@@ -55,6 +55,16 @@ impl SizeMeasurable for [u8; 20] {
     }
 }
 
+impl<T1, T2> SizeMeasurable for (T1, T2)
+where
+    T1: SizeMeasurable,
+    T2: SizeMeasurable,
+{
+    fn aligned_size(&self) -> usize {
+        align(self.0.aligned_size() + self.1.aligned_size())
+    }
+}
+
 // That was found on practice... Check unit test for proofs that works.
 impl SizeMeasurable for String {
     fn aligned_size(&self) -> usize {
