@@ -12,7 +12,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 pub use data::Data;
 pub use data_type::DataType;
 pub use header::{GeneralHeader, DATA_VERSION};
-pub use index::{map_tree_index, map_unique_tree_index, IndexPage};
+pub use index::{map_tree_index, map_unique_tree_index, IndexPage, IndexValue};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
