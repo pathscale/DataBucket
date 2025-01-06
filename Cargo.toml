@@ -3,12 +3,12 @@ members = ["codegen"]
 
 [package]
 name = "data_bucket"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
 repository = "https://github.com/pathscale/DataBucket"
-description = "DataBucket is container for WorkTable"
+description = "DataBucket is container for WorkTable's data"
 
 [dependencies]
 data_bucket_derive = {path = "codegen" , version = "0.1.0"}
