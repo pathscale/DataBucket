@@ -13,6 +13,7 @@ pub use page::{
     seek_to_page_start, update_at, Data as DataPage, DataType, General as GeneralPage,
     GeneralHeader, IndexPage as IndexData, Interval, PageType, SpaceInfo as SpaceInfoData,
     DATA_VERSION, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
+    TableOfContentsPage
 };
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use util::{align, Persistable, SizeMeasurable};

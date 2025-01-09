@@ -2,10 +2,12 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::{Link, SizeMeasurable};
 
-mod data_page;
+mod page;
 mod mappers;
+mod table_of_contents_page;
 
-pub use data_page::IndexPage;
+pub use page::IndexPage;
+pub use table_of_contents_page::TableOfContentsPage;
 pub use mappers::{map_tree_index, map_unique_tree_index};
 
 /// Represents `key/value` pair of B-Tree index, where value is always
