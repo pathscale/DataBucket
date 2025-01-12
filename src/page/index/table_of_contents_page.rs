@@ -17,7 +17,7 @@ pub struct TableOfContentsPage<T> {
     records: HashMap<T, PageId>,
     #[rkyv(with = Skip)]
     estimated_size: usize,
-    is_last: bool,
+    next_page: Option<PageId>,
 }
 
 impl<T> Default for TableOfContentsPage<T> {
@@ -25,7 +25,7 @@ impl<T> Default for TableOfContentsPage<T> {
         Self {
             records: HashMap::new(),
             estimated_size: 0,
-            is_last: false,
+            next_page: None,
         }
     }
 }
@@ -34,11 +34,11 @@ impl<T> TableOfContentsPage<T>
 {
 
     pub fn is_last(&self) -> bool {
-        self.is_last
+        self.next_page.is_some()
     }
 
-    pub fn mark_not_last(&mut self) {
-        self.is_last = false;
+    pub fn mark_not_last(&mut self, page_id: PageId) {
+        self.next_page = Some(page_id)
     }
 
     pub fn estimated_size(&self) -> usize {
@@ -50,6 +50,12 @@ impl<T> TableOfContentsPage<T>
     {
         self.estimated_size += align(val.aligned_size() + page_id.0.aligned_size());
         let _ = self.records.insert(val, page_id);
+    }
+
+    pub fn get(&self, val: &T) -> Option<PageId>
+    where T: Hash + Eq
+    {
+        self.records.get(val).copied()
     }
 
     pub fn remove(&mut self, val: &T)
