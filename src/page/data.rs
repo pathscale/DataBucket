@@ -1,5 +1,5 @@
 use eyre::{eyre, Result};
-
+use rkyv::Archive;
 use crate::Link;
 use crate::Persistable;
 
@@ -55,6 +55,15 @@ impl<const DATA_LENGTH: usize> Data<DATA_LENGTH> {
 impl<const DATA_LENGTH: usize> Persistable for Data<DATA_LENGTH> {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         &self.data[..self.length as usize]
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let mut data = [0; DATA_LENGTH];
+        data.copy_from_slice(bytes);
+        Self {
+            length: bytes.len() as u32,
+            data
+        }
     }
 }
 

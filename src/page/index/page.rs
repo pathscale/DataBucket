@@ -9,6 +9,7 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::api::high::HighDeserializer;
 use scc::ebr::Guard;
 use scc::TreeIndex;
 
@@ -67,8 +68,15 @@ where
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
+    <T as rkyv::Archive>::Archived:
+    rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(&bytes[..]) };
+        rkyv::deserialize(archived).expect("data should be valid")
     }
 }

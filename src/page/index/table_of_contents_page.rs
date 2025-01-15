@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::Serializer;
@@ -34,7 +35,7 @@ impl<T> TableOfContentsPage<T>
 {
 
     pub fn is_last(&self) -> bool {
-        self.next_page.is_some()
+        self.next_page.is_none()
     }
 
     pub fn mark_not_last(&mut self, page_id: PageId) {
@@ -87,10 +88,16 @@ where
     + for<'a> Serialize<
         Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
     > + Hash + Eq,
-    <T as Archive>::Archived: Hash + Eq
+    <T as rkyv::Archive>::Archived:
+    rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>> + Hash + Eq,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(&bytes[..]) };
+        rkyv::deserialize(archived).expect("data should be valid")
     }
 }
 

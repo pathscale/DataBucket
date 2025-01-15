@@ -150,7 +150,7 @@ pub fn parse_page<Page, const PAGE_SIZE: u32>(
     index: u32,
 ) -> eyre::Result<GeneralPage<Page>>
 where
-    Page: rkyv::Archive,
+    Page: rkyv::Archive + Persistable,
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
 {

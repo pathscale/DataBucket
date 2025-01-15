@@ -18,5 +18,5 @@ pub use page::{
     TableOfContentsPage, NewIndexPage
 };
 pub use persistence::{PersistableIndex, PersistableTable};
-pub use util::{align, Persistable, SizeMeasurable};
+pub use util::{align, Persistable, SizeMeasurable, align8, align_vec};
 pub use space::{Id as SpaceId};
