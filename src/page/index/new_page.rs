@@ -15,7 +15,7 @@ use rkyv::ser::sharing::Share;
 use rkyv::util::AlignedVec;
 
 use crate::page::{IndexValue, PageId};
-use crate::{align, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE};
+use crate::{align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE};
 
 /// Represents a page, which is filled with [`IndexValue`]'s of some index.
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -32,11 +32,7 @@ impl<T> NewIndexPage<T> {
     where T: Default + Clone,
     {
         let slots =  vec![0u16; size];
-        let mut v = IndexValue::default();
-        v.link.page_id = 1.into();
-        v.link.length = 4;
-        v.link.offset = 3;
-        let index_values = vec![v; size];
+        let index_values = vec![IndexValue::default(); size];
         Self {
             size: size as u16,
             node_id,
@@ -46,18 +42,28 @@ impl<T> NewIndexPage<T> {
         }
     }
 
+    fn values_count_offset() -> usize
+    where T: Default + SizeMeasurable
+    {
+        GENERAL_HEADER_SIZE + T::default().aligned_size() + u16::default().aligned_size()
+    }
+
+    fn slots_length(size: usize) -> usize {
+        align(size * u16::default().aligned_size()) + 8
+    }
+
     pub fn parse_slots_and_values_count(file: &mut File, page_id: PageId, size: usize) -> eyre::Result<(Vec<u16>, u16)>
     where T: Default + SizeMeasurable
     {
         seek_to_page_start(file, page_id.0)?;
-        let offset = GENERAL_HEADER_SIZE as i64 + align(T::default().aligned_size()) as i64;
+        let offset = Self::values_count_offset() as i64;
         file.seek(SeekFrom::Current(offset))?;
-        let mut values_count_bytes = vec![0u8; align(u16::default().aligned_size())];
+        let mut values_count_bytes = vec![0u8; u16::default().aligned_size()];
         file.read_exact(values_count_bytes.as_mut_slice())?;
         let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(values_count_bytes.as_slice()) };
         let values_count = rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
 
-        let mut slots_bytes = vec![0u8; align(size * u16::default().aligned_size() + 8)];
+        let mut slots_bytes = vec![0u8; Self::slots_length(size)];
         file.read_exact(slots_bytes.as_mut_slice())?;
         let archived = unsafe { rkyv::access_unchecked::<<Vec<u16> as Archive>::Archived>(slots_bytes.as_slice()) };
         let slots = rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
@@ -69,7 +75,7 @@ impl<T> NewIndexPage<T> {
     where T: Default + SizeMeasurable
     {
         seek_to_page_start(file, page_id.0)?;
-        file.seek(SeekFrom::Current(GENERAL_HEADER_SIZE as i64 + align(T::default().aligned_size()) as i64))?;
+        file.seek(SeekFrom::Current(Self::values_count_offset() as i64))?;
 
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&values_count)?;
         file.write(bytes.as_slice())?;
@@ -90,10 +96,10 @@ impl<T> NewIndexPage<T> {
     {
         seek_to_page_start(file, page_id.0)?;
 
-        let mut offset = GENERAL_HEADER_SIZE;
-        offset += align(T::default().aligned_size());
-        offset += align(u16::default().aligned_size() * size + 8);
-        offset += value_index as usize * align(T::default().aligned_size() + PageId::default().0.aligned_size());
+        let mut offset = Self::values_count_offset();
+        offset += u16::default().aligned_size();
+        offset += Self::slots_length(size);
+        offset += value_index as usize * align8(IndexValue::<T>::default().aligned_size());
 
         file.seek(SeekFrom::Current(offset as i64))?;
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
@@ -107,7 +113,7 @@ where
     T: Archive
     + for<'a> Serialize<
         Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
-    > + Default + SizeMeasurable + Debug + Clone,
+    > + Default + SizeMeasurable + Clone,
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
@@ -129,22 +135,42 @@ where
     fn from_bytes(bytes: &[u8]) -> Self {
         let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&bytes[0..2]) };
         let size = rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
-        println!("{}", size);
+
         let t_size = T::default().aligned_size();
         let mut offset = 2;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(&bytes[offset..offset + t_size]);
         let archived = unsafe { rkyv::access_unchecked::<<T as Archive>::Archived>(&v[..]) };
         let node_id = rkyv::deserialize(archived).expect("data should be valid");
-        println!("{:?}", node_id);
+
         offset = 2 + t_size;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(&bytes[offset..offset + 2]);
         let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&v[..]) };
         let values_count = rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
-        println!("{:?}", values_count);
 
-        Self::new(node_id, size as usize)
+        offset = offset + 2;
+        let slots_len = align(size as usize * u16::default().aligned_size()) + 8;
+        let mut v = AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + slots_len]);
+        let s = format!("{:?}", v.as_ref());
+        let archived = unsafe { rkyv::access_unchecked::<<Vec<u16> as Archive>::Archived>(&v[..]) };
+        let slots = rkyv::deserialize::<Vec<u16>, rkyv::rancor::Error>(archived).expect("data should be valid");
+
+        offset = offset + slots_len;
+        let values_len = size as usize * align8(IndexValue::<T>::default().aligned_size()) + 8;
+        let mut v = AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + values_len]);
+        let archived = unsafe { rkyv::access_unchecked::<<Vec<IndexValue<T>> as Archive>::Archived>(&v[..]) };
+        let index_values = rkyv::deserialize::<Vec<IndexValue<T>>, rkyv::rancor::Error>(archived).expect("data should be valid");
+
+        Self {
+            slots,
+            size,
+            values_count,
+            node_id,
+            index_values
+        }
     }
 }
 
@@ -169,10 +195,12 @@ mod tests {
         let size: usize = get_size_from_data_length::<u64>(INNER_PAGE_SIZE);
         let page = NewIndexPage::<u64>::new(1, size);
         let bytes = page.as_bytes();
-        println!("{:?}", bytes.as_ref());
-        println!("{}", size);
-        println!("{}", bytes.as_ref().len());
-        let page = NewIndexPage::<u64>::from_bytes(bytes.as_ref());
+        let new_page = NewIndexPage::<u64>::from_bytes(bytes.as_ref());
 
+        assert_eq!(new_page.node_id, page.node_id);
+        assert_eq!(new_page.values_count, page.values_count);
+        assert_eq!(new_page.size, page.size);
+        assert_eq!(new_page.slots, page.slots);
+        assert_eq!(new_page.index_values, page.index_values);
     }
 }

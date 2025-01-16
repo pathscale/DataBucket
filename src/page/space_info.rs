@@ -76,7 +76,7 @@ mod test {
             primary_key_intervals: vec![],
             secondary_index_intervals: HashMap::new(),
             data_intervals: vec![],
-            pk_gen_state: (),
+            pk_gen_state: 0u128,
             empty_links_list: vec![],
             secondary_index_map: HashMap::new(),
         };

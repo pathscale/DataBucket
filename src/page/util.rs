@@ -159,8 +159,7 @@ where
 
     let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer)?;
-    let archived = unsafe { rkyv::access_unchecked::<<Page as Archive>::Archived>(&buffer[..]) };
-    let info = rkyv::deserialize(archived).expect("data should be valid");
+    let info = Page::from_bytes(buffer.as_ref());
 
     Ok(GeneralPage {
         header,
