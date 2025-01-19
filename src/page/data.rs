@@ -1,5 +1,4 @@
 use eyre::{eyre, Result};
-use rkyv::Archive;
 use crate::Link;
 use crate::Persistable;
 

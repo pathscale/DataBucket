@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-
 use rkyv::{Archive, Deserialize, Serialize};
 use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Strategy;
@@ -8,7 +7,6 @@ use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::Serializer;
 use rkyv::ser::sharing::Share;
 use rkyv::util::AlignedVec;
-use rkyv::with::Skip;
 
 use crate::page::PageId;
 use crate::{align, Persistable, SizeMeasurable};
@@ -16,16 +14,17 @@ use crate::{align, Persistable, SizeMeasurable};
 #[derive(Archive, Clone, Deserialize, Debug, Serialize)]
 pub struct TableOfContentsPage<T> {
     records: HashMap<T, PageId>,
-    #[rkyv(with = Skip)]
     estimated_size: usize,
     next_page: Option<PageId>,
 }
 
-impl<T> Default for TableOfContentsPage<T> {
+impl<T> Default for TableOfContentsPage<T>
+where T: SizeMeasurable
+{
     fn default() -> Self {
         Self {
             records: HashMap::new(),
-            estimated_size: 0,
+            estimated_size: usize::default().aligned_size() + Option::<PageId>::default().aligned_size(),
             next_page: None,
         }
     }

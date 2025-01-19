@@ -5,7 +5,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use crate::page::ty::PageType;
 use crate::space;
 use crate::util::Persistable;
-use crate::{page, PAGE_SIZE};
+use crate::PAGE_SIZE;
 use crate::page::PageId;
 
 pub const DATA_VERSION: u32 = 1u32;

@@ -8,6 +8,9 @@ mod util;
 
 use derive_more::{Display, From};
 use rkyv::{Archive, Deserialize, Serialize};
+use data_bucket_codegen::SizeMeasure;
+
+use crate::{SizeMeasurable, align};
 
 pub use data::Data;
 pub use data_type::DataType;
@@ -62,6 +65,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     PartialEq,
     PartialOrd,
     Serialize,
+    SizeMeasure
 )]
 pub struct PageId(u32);
 

@@ -156,7 +156,6 @@ impl<T> NewIndexPage<T> {
 
         let offset = Self::get_value_offset(size, index as usize);
         file.seek(SeekFrom::Current(offset as i64))?;
-        let mut bytes = vec![0u8; align8(IndexValue::<T>::default().aligned_size())];
         Self::read_value(file)
     }
 
@@ -200,7 +199,7 @@ impl<T> NewIndexPage<T> {
         Ok(value_index + 1)
     }
 
-    pub fn remove_value(file: &mut File, page_id: PageId, size: usize, mut value_index: u16) -> eyre::Result<()>
+    pub fn remove_value(file: &mut File, page_id: PageId, size: usize, value_index: u16) -> eyre::Result<()>
     where
         T: Archive
         + Default
