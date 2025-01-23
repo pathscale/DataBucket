@@ -26,3 +26,9 @@ impl Persistable for u8 {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 }
+
+impl Persistable for String {
+    fn as_bytes(&self) -> impl AsRef<[u8]> {
+        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+    }
+}

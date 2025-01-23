@@ -2,7 +2,7 @@ use clap::Parser;
 use data_bucket::{
     page::{parse_space_info, DataIterator, LinksIterator, PageIterator},
     persistence::data::DataTypeValue,
-    read_data_pages, read_rows_schema, space, PAGE_SIZE,
+    read_data_pages, PAGE_SIZE,
 };
 use std::{fs::File, str};
 
@@ -26,7 +26,7 @@ fn print_horizontal_cells_delimiters(column_widths: &[usize]) {
 
 fn print_padded_string(string: &str, column_width: usize) {
     print!("{}", string);
-    for i in 0..column_width - string.len() {
+    for _ in 0..column_width - string.len() {
         print!(" ");
     }
 }
