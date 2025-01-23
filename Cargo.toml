@@ -1,5 +1,5 @@
 [workspace]
-members = ["codegen"]
+members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
@@ -18,4 +18,9 @@ derive_more = { version = "1.0.0", features = ["from", "error", "display", "into
 rkyv = { version = "0.8.9", features = ["uuid-1"]}
 scc = "2.1.16"
 lockfree = "0.5.1"
+serde = { version = "1.0.215", features = ["derive"] }
 uuid = { version = "1.11.0", features = ["v4"] }
+bitcode = "0.6.3"
+
+[dev-dependencies]
+mktemp = "0.4.0"

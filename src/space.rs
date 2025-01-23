@@ -25,4 +25,4 @@ pub struct Space {
     PartialOrd,
     Serialize,
 )]
-pub struct Id(u32);
+pub struct Id(pub u32);
