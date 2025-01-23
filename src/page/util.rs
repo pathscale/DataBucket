@@ -15,7 +15,8 @@ use crate::persistence::data::DataTypeValue;
 use crate::{DataPage, GeneralPage, IndexData, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 pub fn map_index_pages_to_general<T>(pages: Vec<IndexData<T>>) -> Vec<General<IndexData<T>>> {
-    let mut header = &mut GeneralHeader::new(0.into(), PageType::Index, 0.into());
+    // We are starting ID's from `1` because `0`'s page in file is info page.
+    let header = &mut GeneralHeader::new(1.into(), PageType::Index, 0.into());
     let mut general_pages = vec![];
 
     let mut pages = pages.into_iter();
@@ -44,7 +45,8 @@ pub fn map_index_pages_to_general<T>(pages: Vec<IndexData<T>>) -> Vec<General<In
 pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     pages: Vec<DataPage<DATA_LENGTH>>,
 ) -> Vec<General<DataPage<DATA_LENGTH>>> {
-    let mut header = &mut GeneralHeader::new(0.into(), PageType::Data, 0.into());
+    // We are starting ID's from `1` because `0`'s page in file is info page.
+    let header = &mut GeneralHeader::new(1.into(), PageType::Data, 0.into());
     let mut general_pages = vec![];
 
     let mut pages = pages.into_iter();
@@ -416,7 +418,7 @@ pub mod test {
 
         let guard = Guard::new();
         let res = map_unique_tree_index::<_, { INNER_PAGE_SIZE }>(index.iter(&guard));
-        let mut header = GeneralHeader {
+        let header = GeneralHeader {
             data_version: DATA_VERSION,
             space_id: 0.into(),
             page_id: 0.into(),
@@ -431,7 +433,7 @@ pub mod test {
         let second = generalised.get(1).unwrap().header;
         let third = generalised.get(2).unwrap().header;
 
-        assert_eq!(first.page_id, header.page_id);
+        assert_eq!(first.page_id, 1.into());
         assert_eq!(first.space_id, header.space_id);
         assert_eq!(first.previous_id, header.previous_id);
         assert_eq!(first.next_id, header.next_id);

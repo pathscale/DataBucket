@@ -1,5 +1,3 @@
-use crate::GeneralHeader;
-
 pub trait PersistableIndex {
     type PersistedIndex;
 
