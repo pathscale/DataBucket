@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+
 use rkyv::{Archive, Deserialize, Serialize};
 use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Strategy;
@@ -14,6 +15,8 @@ use crate::{align, Persistable, SizeMeasurable};
 #[derive(Archive, Clone, Deserialize, Debug, Serialize)]
 pub struct TableOfContentsPage<T> {
     records: HashMap<T, PageId>,
+
+    empty_pages: Vec<PageId>,
     estimated_size: usize,
     next_page: Option<PageId>,
 }
@@ -24,6 +27,7 @@ where T: SizeMeasurable
     fn default() -> Self {
         Self {
             records: HashMap::new(),
+            empty_pages: vec![],
             estimated_size: usize::default().aligned_size() + Option::<PageId>::default().aligned_size(),
             next_page: None,
         }
@@ -52,6 +56,18 @@ impl<T> TableOfContentsPage<T>
         let _ = self.records.insert(val, page_id);
     }
 
+    pub fn pop_empty_page(&mut self) -> Option<PageId>
+    where T: SizeMeasurable
+    {
+        if self.empty_pages.is_empty() {
+            return None
+        }
+
+        let val = self.empty_pages.pop().expect("should not be empty as checked before");
+        self.estimated_size -= val.aligned_size();
+        Some(val)
+    }
+
     pub fn get(&self, val: &T) -> Option<PageId>
     where T: Hash + Eq
     {
@@ -62,7 +78,10 @@ impl<T> TableOfContentsPage<T>
     where T: Hash + Eq + SizeMeasurable
     {
         self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
-        let _ = self.records.remove(val);
+        self.estimated_size += PageId::default().0.aligned_size();
+        
+        let id = self.records.remove(val).expect("value should be available if remove is called");
+        self.empty_pages.push(id);
     }
 
     pub fn contains(&self, val: &T) -> bool

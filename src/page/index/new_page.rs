@@ -21,7 +21,7 @@ use crate::{align, align8, seek_to_page_start, Persistable, SizeMeasurable, GENE
 pub struct NewIndexPage<T> {
     pub size: u16,
     pub node_id: T,
-    pub values_count: u16,
+    pub current_index: u16,
     pub slots: Vec<u16>,
     pub index_values: Vec<IndexValue<T>>,
 }
@@ -29,7 +29,7 @@ pub struct NewIndexPage<T> {
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct IndexPageUtility<T> {
     pub node_id: T,
-    pub values_count: u16,
+    pub current_index: u16,
     pub slots: Vec<u16>,
 }
 
@@ -42,7 +42,7 @@ impl<T> NewIndexPage<T> {
         Self {
             size: size as u16,
             node_id,
-            values_count: 0,
+            current_index: 0,
             slots,
             index_values,
         }
@@ -71,7 +71,7 @@ impl<T> NewIndexPage<T> {
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(&bytes[offset..offset + 2]);
         let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&v[..]) };
-        let values_count = rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
+        let current_index = rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
         offset = offset + 2;
         let mut v = AlignedVec::<4>::new();
@@ -81,7 +81,7 @@ impl<T> NewIndexPage<T> {
 
         IndexPageUtility {
             node_id,
-            values_count,
+            current_index,
             slots
         }
     }
@@ -124,7 +124,7 @@ impl<T> NewIndexPage<T> {
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.node_id)?;
         file.write(bytes.as_slice())?;
 
-        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.values_count)?;
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_index)?;
         file.write(bytes.as_slice())?;
 
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.slots)?;
@@ -236,8 +236,8 @@ where
         bytes.extend_from_slice(size_bytes.as_ref());
         let node_id_bytes =  rkyv::to_bytes::<rkyv::rancor::Error>(&self.node_id).unwrap();
         bytes.extend_from_slice(node_id_bytes.as_ref());
-        let values_count_bytes =  rkyv::to_bytes::<rkyv::rancor::Error>(&self.values_count).unwrap();
-        bytes.extend_from_slice(values_count_bytes.as_ref());
+        let current_index_bytes =  rkyv::to_bytes::<rkyv::rancor::Error>(&self.current_index).unwrap();
+        bytes.extend_from_slice(current_index_bytes.as_ref());
         let slots_bytes =  rkyv::to_bytes::<rkyv::rancor::Error>(&self.slots).unwrap();
         bytes.extend_from_slice(slots_bytes.as_ref());
         let values_bytes =  rkyv::to_bytes::<rkyv::rancor::Error>(&self.index_values).unwrap();
@@ -265,7 +265,7 @@ where
         Self {
             slots: utility.slots,
             size,
-            values_count: utility.values_count,
+            current_index: utility.current_index,
             node_id: utility.node_id,
             index_values
         }
@@ -296,7 +296,7 @@ mod tests {
         let new_page = NewIndexPage::<u64>::from_bytes(bytes.as_ref());
 
         assert_eq!(new_page.node_id, page.node_id);
-        assert_eq!(new_page.values_count, page.values_count);
+        assert_eq!(new_page.current_index, page.current_index);
         assert_eq!(new_page.size, page.size);
         assert_eq!(new_page.slots, page.slots);
         assert_eq!(new_page.index_values, page.index_values);
