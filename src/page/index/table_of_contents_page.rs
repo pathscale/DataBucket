@@ -67,11 +67,18 @@ impl<T> TableOfContentsPage<T>
     pub fn remove(&mut self, val: &T) -> PageId
     where T: Hash + Eq + SizeMeasurable
     {
+        let id = self.remove_without_record(val);
+        self.empty_pages.push(id);
+        id
+    }
+
+    pub fn remove_without_record(&mut self, val: &T) -> PageId
+    where T: Hash + Eq + SizeMeasurable
+    {
         self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
         self.estimated_size += PageId::default().0.aligned_size();
-        
+
         let id = self.records.remove(val).expect("value should be available if remove is called");
-        self.empty_pages.push(id);
         id
     }
     
