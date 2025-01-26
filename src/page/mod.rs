@@ -73,6 +73,10 @@ impl PageId {
     pub fn next(self) -> Self {
         PageId(self.0 + 1)
     }
+    
+    pub fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
 }
 
 impl From<PageId> for usize {

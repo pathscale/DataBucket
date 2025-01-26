@@ -18,7 +18,6 @@ pub struct TableOfContentsPage<T> {
 
     empty_pages: Vec<PageId>,
     estimated_size: usize,
-    next_page: Option<PageId>,
 }
 
 impl<T> Default for TableOfContentsPage<T>
@@ -29,21 +28,12 @@ where T: SizeMeasurable
             records: HashMap::new(),
             empty_pages: vec![],
             estimated_size: usize::default().aligned_size() + Option::<PageId>::default().aligned_size(),
-            next_page: None,
         }
     }
 }
 
 impl<T> TableOfContentsPage<T>
 {
-
-    pub fn is_last(&self) -> bool {
-        self.next_page.is_none()
-    }
-
-    pub fn mark_not_last(&mut self, page_id: PageId) {
-        self.next_page = Some(page_id)
-    }
 
     pub fn estimated_size(&self) -> usize {
         self.estimated_size
