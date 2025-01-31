@@ -6,7 +6,7 @@ mod space_info;
 mod ty;
 mod util;
 
-use derive_more::{Display, From};
+use derive_more::{Display, From, Into};
 use rkyv::{Archive, Deserialize, Serialize};
 use data_bucket_codegen::SizeMeasure;
 
@@ -61,6 +61,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     Eq,
     From,
     Hash,
+    Into,
     Ord,
     PartialEq,
     PartialOrd,

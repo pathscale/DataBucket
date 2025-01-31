@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::collections::BTreeMap;
 
 use rkyv::{Archive, Deserialize, Serialize};
 use rkyv::api::high::HighDeserializer;
@@ -14,7 +13,7 @@ use crate::{align, Persistable, SizeMeasurable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Serialize)]
 pub struct TableOfContentsPage<T> {
-    records: HashMap<T, PageId>,
+    records: BTreeMap<T, PageId>,
 
     empty_pages: Vec<PageId>,
     estimated_size: usize,
@@ -25,7 +24,7 @@ where T: SizeMeasurable
 {
     fn default() -> Self {
         Self {
-            records: HashMap::new(),
+            records: BTreeMap::new(),
             empty_pages: vec![],
             estimated_size: usize::default().aligned_size() + Option::<PageId>::default().aligned_size(),
         }
@@ -40,7 +39,7 @@ impl<T> TableOfContentsPage<T>
     }
 
     pub fn insert(&mut self, val: T, page_id: PageId)
-    where T: Hash + Eq + SizeMeasurable
+    where T: Ord + Eq + SizeMeasurable
     {
         self.estimated_size += align(val.aligned_size() + page_id.0.aligned_size());
         let _ = self.records.insert(val, page_id);
@@ -59,13 +58,13 @@ impl<T> TableOfContentsPage<T>
     }
 
     pub fn get(&self, val: &T) -> Option<PageId>
-    where T: Hash + Eq
+    where T: Ord + Eq
     {
         self.records.get(val).copied()
     }
 
     pub fn remove(&mut self, val: &T) -> PageId
-    where T: Hash + Eq + SizeMeasurable
+    where T: Ord + Eq + SizeMeasurable
     {
         let id = self.remove_without_record(val);
         self.empty_pages.push(id);
@@ -73,7 +72,7 @@ impl<T> TableOfContentsPage<T>
     }
 
     pub fn remove_without_record(&mut self, val: &T) -> PageId
-    where T: Hash + Eq + SizeMeasurable
+    where T: Ord + Eq + SizeMeasurable
     {
         self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
         self.estimated_size += PageId::default().0.aligned_size();
@@ -81,16 +80,16 @@ impl<T> TableOfContentsPage<T>
         let id = self.records.remove(val).expect("value should be available if remove is called");
         id
     }
-    
+
     pub fn update_key(&mut self, old_key: &T, new_key: T)
-    where T: Hash + Eq
+    where T: Ord + Eq
     {
         let id = self.records.remove(old_key).expect("value should be available if update is called");
         self.records.insert(new_key, id);
     }
 
     pub fn contains(&self, val: &T) -> bool
-    where T: Hash + Eq
+    where T: Ord + Eq
     {
         self.records.contains_key(val)
     }
@@ -98,7 +97,7 @@ impl<T> TableOfContentsPage<T>
 
 impl<T> IntoIterator for TableOfContentsPage<T> {
     type Item = (T, PageId);
-    type IntoIter = <HashMap<T, PageId> as IntoIterator>::IntoIter;
+    type IntoIter = <BTreeMap<T, PageId> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.records.into_iter()
@@ -110,9 +109,9 @@ where
     T: Archive
     + for<'a> Serialize<
         Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
-    > + Hash + Eq,
+    > + Ord + Eq,
     <T as rkyv::Archive>::Archived:
-    rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>> + Hash + Eq,
+    rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>> + Ord + Eq,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()

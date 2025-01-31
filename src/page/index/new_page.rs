@@ -65,7 +65,7 @@ impl<T> NewIndexPage<T> {
                 *slot = 0
         }
         self.current_index = first_empty_value;
-
+        self.node_id = self.index_values[self.slots[index - 1] as usize].key.clone();
 
         new_page
     }
@@ -176,7 +176,7 @@ impl<T> NewIndexPage<T> {
     {
         seek_to_page_start(file, page_id.0)?;
 
-        let offset = Self::get_value_offset(size, index as usize);
+        let offset = Self::get_value_offset(size, index);
         file.seek(SeekFrom::Current(offset as i64))?;
         Self::read_value(file)
     }
@@ -212,10 +212,12 @@ impl<T> NewIndexPage<T> {
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
         file.write(bytes.as_slice())?;
 
-        let mut value = Self::read_value(file)?;
-        while value != IndexValue::default() {
-            value_index += 1;
-            value =  Self::read_value(file)?;
+        if value_index != size as u16 - 1 {
+            let mut value = Self::read_value(file)?;
+            while value != IndexValue::default() {
+                value_index += 1;
+                value = Self::read_value(file)?;
+            }
         }
 
         Ok(value_index + 1)
