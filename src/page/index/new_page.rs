@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::hash::Hash;
 use std::io::{Read, Seek, SeekFrom, Write};
-
+use std::mem;
 use rkyv::{Archive, Deserialize, Serialize};
 use rkyv::de::Pool;
 use rkyv::rancor::Strategy;
@@ -46,6 +46,28 @@ impl<T> NewIndexPage<T> {
             slots,
             index_values,
         }
+    }
+
+    pub fn split(&mut self, index: usize) -> NewIndexPage<T>
+    where T: Clone + Default
+    {
+        let mut new_page = NewIndexPage::new(self.node_id.clone(), self.size as usize);
+        let mut first_empty_value = u16::MAX;
+        for (index, slot) in self.slots[index..].iter_mut().enumerate() {
+            if first_empty_value > *slot {
+                first_empty_value = *slot;
+            }
+            let mut index_value = IndexValue::default();
+            mem::swap(&mut self.index_values[*slot as usize], &mut index_value);
+            new_page.index_values[index] = index_value;
+            new_page.slots[index] = index as u16;
+            new_page.current_index = (index + 1) as u16;
+                *slot = 0
+        }
+        self.current_index = first_empty_value;
+
+
+        new_page
     }
 
     fn index_page_utility_length(size: usize) -> usize
@@ -275,6 +297,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{align8, Link, NewIndexPage, Persistable, SizeMeasurable, INNER_PAGE_SIZE};
+    use crate::page::IndexValue;
 
     pub fn get_size_from_data_length<T>(length: usize) -> usize
     where
@@ -300,5 +323,42 @@ mod tests {
         assert_eq!(new_page.size, page.size);
         assert_eq!(new_page.slots, page.slots);
         assert_eq!(new_page.index_values, page.index_values);
+    }
+
+    #[test]
+    fn test_split() {
+        let mut page = NewIndexPage::<u64>::new(7, 8);
+        page.slots = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        page.current_index = 8;
+        page.index_values = {
+            let mut v = vec![];
+            for i in &page.slots {
+                v.push(IndexValue {
+                    key: *i as u64,
+                    link: Default::default(),
+                })
+            }
+            v
+        };
+
+        let split = page.split(4);
+        assert_eq!(page.current_index, 4);
+        assert_eq!(page.slots[page.current_index as usize], 0);
+
+        assert_eq!(page.index_values[0].key, 0);
+        assert_eq!(page.index_values[1].key, 1);
+        assert_eq!(page.index_values[2].key, 2);
+        assert_eq!(page.index_values[3].key, 3);
+
+        assert_eq!(split.current_index, 4);
+        assert_eq!(split.slots[0], 0);
+        assert_eq!(split.slots[1], 1);
+        assert_eq!(split.slots[2], 2);
+        assert_eq!(split.slots[3], 3);
+
+        assert_eq!(split.index_values[0].key, 4);
+        assert_eq!(split.index_values[1].key, 5);
+        assert_eq!(split.index_values[2].key, 6);
+        assert_eq!(split.index_values[3].key, 7);
     }
 }
