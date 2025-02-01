@@ -67,10 +67,13 @@ impl<T> NewIndexPage<T> {
             new_page.index_values[index] = index_value;
             new_page.slots[index] = index as u16;
             new_page.current_index = (index + 1) as u16;
-                *slot = 0
+            *slot = 0;
         }
+        new_page.current_length = self.current_length - index as u16;
+
         self.current_index = first_empty_value;
         self.node_id = self.index_values[self.slots[index - 1] as usize].key.clone();
+        self.current_length = index as u16;
 
         new_page
     }
@@ -358,6 +361,7 @@ mod tests {
         let mut page = NewIndexPage::<u64>::new(7, 8);
         page.slots = vec![0, 1, 2, 3, 4, 5, 6, 7];
         page.current_index = 8;
+        page.current_length = 8;
         page.index_values = {
             let mut v = vec![];
             for i in &page.slots {
@@ -371,6 +375,7 @@ mod tests {
 
         let split = page.split(4);
         assert_eq!(page.current_index, 4);
+        assert_eq!(page.current_length, 4);
         assert_eq!(page.slots[page.current_index as usize], 0);
 
         assert_eq!(page.index_values[0].key, 0);
@@ -379,6 +384,7 @@ mod tests {
         assert_eq!(page.index_values[3].key, 3);
 
         assert_eq!(split.current_index, 4);
+        assert_eq!(split.current_length, 4);
         assert_eq!(split.slots[0], 0);
         assert_eq!(split.slots[1], 1);
         assert_eq!(split.slots[2], 2);
