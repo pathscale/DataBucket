@@ -93,6 +93,10 @@ impl<T> TableOfContentsPage<T>
     {
         self.records.contains_key(val)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&T, &PageId)> {
+        self.records.iter()
+    }
 }
 
 impl<T> IntoIterator for TableOfContentsPage<T> {

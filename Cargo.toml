@@ -19,3 +19,4 @@ rkyv = { version = "0.8.9", features = ["uuid-1"]}
 scc = "2.1.16"
 lockfree = "0.5.1"
 uuid = { version = "1.11.0", features = ["v4"] }
+indexset = { path = "../indexset", version = "0.10.3", features = ["concurrent", "cdc"] }

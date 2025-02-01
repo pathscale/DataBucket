@@ -1,3 +1,4 @@
+use indexset::core::pair::Pair;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::{Link, SizeMeasurable};
@@ -26,5 +27,16 @@ where
 {
     fn aligned_size(&self) -> usize {
         self.key.aligned_size() + self.link.aligned_size()
+    }
+}
+
+impl<T> From<IndexValue<T>> for Pair<T, Link>
+where T: Ord
+{
+    fn from(value: IndexValue<T>) -> Self {
+        Pair {
+            key: value.key,
+            value: value.link,
+        }
     }
 }
