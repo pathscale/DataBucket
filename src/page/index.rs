@@ -74,7 +74,7 @@ where
     }
 }
 
-pub fn map_unique_tree_index<'a, T, const PAGE_SIZE: usize>(
+pub fn map_tree_index<'a, T, const PAGE_SIZE: usize>(
     index: impl Iterator<Item = (&'a T, &'a Link)>,
 ) -> Vec<IndexPage<T>>
 where
@@ -96,36 +96,6 @@ where
             current_size = 8 + index_value.aligned_size()
         }
         current_page.index_values.push(index_value)
-    }
-    pages.push(current_page);
-
-    pages
-}
-
-pub fn map_tree_index<'a, T, const PAGE_SIZE: usize>(
-    index: impl Iterator<Item = (&'a T, &'a Arc<lockfree::set::Set<Link>>)>,
-) -> Vec<IndexPage<T>>
-where
-    T: Clone + Ord + SizeMeasurable + 'static,
-{
-    let mut pages = vec![];
-    let mut current_page = IndexPage::default();
-    let mut current_size = 8;
-
-    for (key, links) in index {
-        for link in links.iter() {
-            let index_value = IndexValue {
-                key: key.clone(),
-                link: *link,
-            };
-            current_size += index_value.aligned_size();
-            if current_size > PAGE_SIZE {
-                pages.push(current_page.clone());
-                current_page.index_values.clear();
-                current_size = 8 + index_value.aligned_size()
-            }
-            current_page.index_values.push(index_value)
-        }
     }
     pages.push(current_page);
 

@@ -10,7 +10,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 pub use data::Data;
 pub use header::{GeneralHeader, DATA_VERSION};
-pub use index::{map_tree_index, map_unique_tree_index, IndexPage, IndexValue};
+pub use index::{map_tree_index, IndexPage, IndexValue};
 pub use iterators::{DataIterator, LinksIterator, PageIterator};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
