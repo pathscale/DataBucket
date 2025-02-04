@@ -1,7 +1,7 @@
 mod data;
-mod data_type;
 mod header;
 mod index;
+mod iterators;
 mod space_info;
 mod ty;
 mod util;
@@ -13,14 +13,15 @@ use data_bucket_codegen::SizeMeasure;
 use crate::{SizeMeasurable, align};
 
 pub use data::Data;
-pub use data_type::DataType;
 pub use header::{GeneralHeader, DATA_VERSION};
-pub use index::{map_tree_index, map_unique_tree_index, IndexPage, IndexValue, TableOfContentsPage, NewIndexPage};
+pub use index::{map_tree_index, IndexPage, IndexValue, TableOfContentsPage, NewIndexPage};
+pub use iterators::{DataIterator, LinksIterator, PageIterator};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
 pub use util::{
     map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
-    parse_page, persist_page, read_index_pages, seek_by_link, seek_to_page_start, update_at,
+    parse_page, parse_space_info, persist_page, read_data_pages, read_index_pages,
+    read_rows_schema, seek_by_link, seek_to_page_start, update_at,
 };
 
 // TODO: Move to config
@@ -74,7 +75,7 @@ impl PageId {
     pub fn next(self) -> Self {
         PageId(self.0 + 1)
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.0 == 0
     }

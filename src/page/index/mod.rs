@@ -11,7 +11,7 @@ mod new_page;
 pub use page::IndexPage;
 pub use new_page::NewIndexPage;
 pub use table_of_contents_page::TableOfContentsPage;
-pub use mappers::{map_tree_index, map_unique_tree_index};
+pub use mappers::map_tree_index;
 
 /// Represents `key/value` pair of B-Tree index, where value is always
 /// [`data::Link`], as it is represented in primary and secondary indexes.

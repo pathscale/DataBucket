@@ -1,8 +1,9 @@
 //! [`IndexPage`] definition.
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
+use indexset::concurrent::map::BTreeMap;
+use indexset::concurrent::multimap::BTreeMultiMap;
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::sharing::Share;
@@ -10,8 +11,6 @@ use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 use rkyv::api::high::HighDeserializer;
-use scc::ebr::Guard;
-use scc::TreeIndex;
 
 use crate::link::Link;
 use crate::page::IndexValue;
@@ -35,29 +34,17 @@ impl<'a, T> Default for IndexPage<T> {
 
 impl<T> IndexPage<T>
 where
-    T: Clone + Ord + Debug + 'static,
+    T: Clone + Ord + Debug + Send + 'static,
 {
-    pub fn append_to_unique_tree_index(self, index: &TreeIndex<T, Link>) {
+    pub fn append_to_unique_tree_index(self, index: &BTreeMap<T, Link>) {
         for val in self.index_values {
-            // Errors only if key is already exists.
-            index.insert(val.key, val.link).expect("index is unique");
+            index.insert(val.key, val.link);
         }
     }
 
-    pub fn append_to_tree_index(self, index: &TreeIndex<T, Arc<lockfree::set::Set<Link>>>) {
+    pub fn append_to_tree_index(self, index: &BTreeMultiMap<T, Link>) {
         for val in self.index_values {
-            let guard = Guard::new();
-            if let Some(set) = index.peek(&val.key, &guard) {
-                set.insert(val.link).expect("Link should be unique");
-            } else {
-                let set = lockfree::set::Set::new();
-                set
-                    .insert(val.link)
-                    .expect("Link should be unique as first inserted value");
-                index
-                    .insert(val.key, Arc::new(set))
-                    .expect("index is unique");
-            }
+            index.insert(val.key, val.link);
         }
     }
 }
