@@ -18,6 +18,19 @@ use rkyv::util::AlignedVec;
 use crate::page::{IndexValue, PageId};
 use crate::{align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE};
 
+pub fn get_index_page_size_from_data_length<T>(length: usize) -> usize
+where
+    T: Default + SizeMeasurable,
+{
+    let node_id_size = T::default().aligned_size();
+    let slot_size = u16::default().aligned_size();
+    let index_value_size = align8(T::default().aligned_size() + Link::default().aligned_size());
+    let vec_util_size = 8;
+    let size = (length - node_id_size - slot_size * 3 - vec_util_size * 2)
+        / (slot_size + index_value_size);
+    size
+}
+
 /// Represents a page, which is filled with [`IndexValue`]'s of some index.
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct NewIndexPage<T> {
@@ -269,6 +282,21 @@ impl<T> NewIndexPage<T> {
             node.push(self.index_values[*slot as usize].clone().into())
         }
         node
+    }
+
+    pub fn from_node(node: &Vec<impl Into<IndexValue<T>> + Clone>, size: usize) -> Self
+    where T: Clone + Ord + Default
+    {
+        let mut page = NewIndexPage::new(Into::<IndexValue<T>>::into(node.last().expect("should contain at least one key").clone()).key, size);
+
+        for (i, pair) in node.iter().enumerate() {
+            page.index_values[i] = Into::<IndexValue<T>>::into(pair.clone());
+            page.slots[i] = i as u16;
+        }
+        page.current_index = node.len() as u16;
+        page.current_length = node.len() as u16;
+
+        page
     }
 }
 

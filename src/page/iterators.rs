@@ -10,56 +10,6 @@ use crate::{
 
 use super::{index::{ArchivedIndexValue, IndexValue}, seek_by_link, seek_to_page_start, Interval, SpaceInfo};
 
-pub struct PageIterator {
-    intervals: Vec<Interval>,
-    current_intervals_index: usize,
-    current_position_in_interval: usize,
-}
-
-impl PageIterator {
-    pub fn new(intervals: Vec<Interval>) -> PageIterator {
-        PageIterator {
-            current_intervals_index: 0,
-            current_position_in_interval: if intervals.len() > 0 {
-                intervals[0].0
-            } else {
-                0
-            },
-            intervals,
-        }
-    }
-}
-
-impl Iterator for PageIterator {
-    type Item = u32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut result: Option<Self::Item> = None;
-
-        if self.current_intervals_index >= self.intervals.len() {
-            result = None
-        } else if self.current_position_in_interval
-            >= self.intervals[self.current_intervals_index].0
-            && self.current_position_in_interval <= self.intervals[self.current_intervals_index].1
-        {
-            result = Some(self.current_position_in_interval as u32);
-            self.current_position_in_interval += 1;
-        } else if self.current_position_in_interval > self.intervals[self.current_intervals_index].1
-        {
-            self.current_intervals_index += 1;
-            if self.current_intervals_index >= self.intervals.len() {
-                result = None;
-            } else {
-                self.current_position_in_interval = self.intervals[self.current_intervals_index].0;
-                result = Some(self.current_position_in_interval as u32);
-                self.current_position_in_interval += 1;
-            }
-        }
-
-        result
-    }
-}
-
 pub struct LinksIterator<'a> {
     file: &'a mut std::fs::File,
     page_id: u32,
@@ -213,29 +163,14 @@ mod test {
         persistence::data::DataTypeValue,
         Interval, Link, PAGE_SIZE,
     };
+    use crate::page::util::test::create_test_database_file;
+    use super::LinksIterator;
 
-    use super::{LinksIterator, PageIterator};
-
-    #[test]
-    fn test_page_iterator() {
-        let interval1 = Interval(1, 2);
-        let interval2 = Interval(5, 7);
-        let page_iterator = PageIterator::new(vec![interval1, interval2]);
-        let collected = page_iterator.collect::<Vec<_>>();
-        assert_eq!(collected, vec![1, 2, 5, 6, 7]);
-    }
-
-    #[test]
-    fn test_page_iterator_empty() {
-        let page_iterator = PageIterator::new(vec![]);
-        let collected = page_iterator.collect::<Vec<_>>();
-        assert_eq!(collected, Vec::<u32>::new());
-    }
 
     #[test]
     fn test_links_iterator() {
         let filename = "tests/data/table_links_test.wt";
-        super::super::util::test::create_test_database_file(filename);
+        create_test_database_file(filename);
 
         let mut file = std::fs::File::open(filename).unwrap();
         let space_info = parse_space_info::<PAGE_SIZE>(&mut file).unwrap();
@@ -260,7 +195,7 @@ mod test {
     #[test]
     fn test_pages_and_links_iterators() {
         let filename = "tests/data/table_pages_and_links_test.wt";
-        super::super::util::test::create_test_database_file(filename);
+        create_test_database_file(filename);
 
         let mut file = std::fs::File::open(filename).unwrap();
         let space_info = parse_space_info::<PAGE_SIZE>(&mut file).unwrap();

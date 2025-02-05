@@ -1,3 +1,4 @@
+use indexset::core::multipair::MultiPair;
 use indexset::core::pair::Pair;
 use rkyv::{Archive, Deserialize, Serialize};
 
@@ -9,7 +10,7 @@ mod table_of_contents_page;
 mod new_page;
 
 pub use page::IndexPage;
-pub use new_page::NewIndexPage;
+pub use new_page::{NewIndexPage, get_index_page_size_from_data_length};
 pub use table_of_contents_page::TableOfContentsPage;
 pub use mappers::map_tree_index;
 
@@ -37,6 +38,28 @@ where T: Ord
         Pair {
             key: value.key,
             value: value.link,
+        }
+    }
+}
+
+impl<T> From<Pair<T, Link>> for IndexValue<T>
+where T: Ord
+{
+    fn from(pair: Pair<T, Link>) -> Self {
+        IndexValue {
+            key: pair.key,
+            link: pair.value
+        }
+    }
+}
+
+impl<T> From<MultiPair<T, Link>> for IndexValue<T>
+where T: Ord
+{
+    fn from(pair: MultiPair<T, Link>) -> Self {
+        IndexValue {
+            key: pair.key,
+            link: pair.value
         }
     }
 }
