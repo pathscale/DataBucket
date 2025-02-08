@@ -1,5 +1,4 @@
 //! [`SpaceInfo`] declaration.
-use std::collections::HashMap;
 
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
@@ -8,6 +7,7 @@ use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 use rkyv::api::high::HighDeserializer;
+
 use crate::util::Persistable;
 use crate::{space, Link};
 
@@ -24,10 +24,7 @@ pub struct SpaceInfo<Pk = ()> {
     pub name: SpaceName,
     pub row_schema: Vec<(String, String)>,
     pub primary_key_fields: Vec<String>,
-    pub primary_key_length: u32,
     pub secondary_index_types: Vec<(String, String)>,
-    pub secondary_index_lengths: HashMap<String, u32,>,
-    pub data_length: u32,
     pub pk_gen_state: Pk,
     pub empty_links_list: Vec<Link>,
 }
@@ -63,8 +60,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
     use crate::page::{SpaceInfo, INNER_PAGE_SIZE};
     use crate::util::Persistable;
 
@@ -76,9 +71,6 @@ mod test {
             name: "Test".to_string(),
             row_schema: vec![],
             primary_key_fields: vec![],
-            primary_key_length: 0,
-            secondary_index_lengths: HashMap::new(),
-            data_length: 0,
             pk_gen_state: 0u128,
             empty_links_list: vec![],
             secondary_index_types: vec![],
