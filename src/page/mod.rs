@@ -12,9 +12,9 @@ use data_bucket_codegen::SizeMeasure;
 
 use crate::{SizeMeasurable, align};
 
-pub use data::Data;
+pub use data::DataPage;
 pub use header::{GeneralHeader, DATA_VERSION};
-pub use index::{map_tree_index, IndexPage, IndexValue, TableOfContentsPage, NewIndexPage, get_index_page_size_from_data_length};
+pub use index::{IndexValue, TableOfContentsPage, IndexPage, get_index_page_size_from_data_length};
 //pub use iterators::{DataIterator, LinksIterator};
 pub use space_info::{Interval, SpaceInfo};
 pub use ty::PageType;
@@ -46,8 +46,8 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 /// **2 bytes are added by rkyv implicitly.**
 pub const GENERAL_HEADER_SIZE: usize = 28;
 
-/// Length of the inner part of [`General`] page. It's counted as [`PAGE_SIZE`]
-/// without [`General`] page [`GENERAL_HEADER_SIZE`].
+/// Length of the inner part of [`GeneralPage`] page. It's counted as [`PAGE_SIZE`]
+/// without [`GeneralPage`] page [`GENERAL_HEADER_SIZE`].
 pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
 
 /// Represents page's identifier. Is unique within the table bounds
@@ -91,7 +91,7 @@ impl From<PageId> for usize {
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
-pub struct General<Inner> {
+pub struct GeneralPage<Inner> {
     pub header: GeneralHeader,
     pub inner: Inner,
 }

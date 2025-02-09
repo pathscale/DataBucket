@@ -9,17 +9,16 @@ use super::index::IndexValue;
 use super::SpaceInfo;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
-use crate::page::General;
-use crate::{DataPage, GeneralPage, IndexData, Link, NewIndexPage, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{DataPage, GeneralPage, Link, IndexPage, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
-pub fn map_index_pages_to_general<T>(pages: Vec<NewIndexPage<T>>) -> Vec<General<NewIndexPage<T>>> {
+pub fn map_index_pages_to_general<T>(pages: Vec<IndexPage<T>>) -> Vec<GeneralPage<IndexPage<T>>> {
     // We are starting ID's from `1` because `0`'s page in file is info page.
     let header = &mut GeneralHeader::new(1.into(), PageType::Index, 0.into());
     let mut general_pages = vec![];
 
     let mut pages = pages.into_iter();
     if let Some(p) = pages.next() {
-        let general = General {
+        let general = GeneralPage {
             header: header.clone(),
             inner: p,
         };
@@ -28,7 +27,7 @@ pub fn map_index_pages_to_general<T>(pages: Vec<NewIndexPage<T>>) -> Vec<General
     let mut previous_header = header;
 
     for p in pages {
-        let general = General {
+        let general = GeneralPage {
             header: previous_header.follow_with(PageType::Index),
             inner: p,
         };
@@ -42,14 +41,14 @@ pub fn map_index_pages_to_general<T>(pages: Vec<NewIndexPage<T>>) -> Vec<General
 
 pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     pages: Vec<DataPage<DATA_LENGTH>>,
-) -> Vec<General<DataPage<DATA_LENGTH>>> {
+) -> Vec<GeneralPage<DataPage<DATA_LENGTH>>> {
     // We are starting ID's from `1` because `0`'s page in file is info page.
     let header = &mut GeneralHeader::new(1.into(), PageType::Data, 0.into());
     let mut general_pages = vec![];
 
     let mut pages = pages.into_iter();
     if let Some(p) = pages.next() {
-        let general = General {
+        let general = GeneralPage {
             header: header.clone(),
             inner: p,
         };
@@ -58,7 +57,7 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     let mut previous_header = header;
 
     for p in pages {
-        let general = General {
+        let general = GeneralPage {
             header: previous_header.follow_with(PageType::Data),
             inner: p,
         };
@@ -229,8 +228,8 @@ where
     let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer)?;
     let archived =
-        unsafe { rkyv::access_unchecked::<<IndexData<T> as Archive>::Archived>(&buffer[..]) };
-    let index_records: Vec<IndexValue<T>> = rkyv::deserialize::<IndexData<T>, _>(archived)
+        unsafe { rkyv::access_unchecked::<<IndexPage<T> as Archive>::Archived>(&buffer[..]) };
+    let index_records: Vec<IndexValue<T>> = rkyv::deserialize::<IndexPage<T>, _>(archived)
         .expect("data should be valid")
         .index_values;
 
