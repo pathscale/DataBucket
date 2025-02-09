@@ -1,4 +1,4 @@
-//! [`SpaceInfo`] declaration.
+//! [`SpaceInfoPage`] declaration.
 
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
@@ -18,7 +18,7 @@ pub type SpaceName = String;
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
 #[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize)]
-pub struct SpaceInfo<Pk = ()> {
+pub struct SpaceInfoPage<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
     pub name: SpaceName,
@@ -39,7 +39,7 @@ impl Interval {
     }
 }
 
-impl<Pk> Persistable for SpaceInfo<Pk>
+impl<Pk> Persistable for SpaceInfoPage<Pk>
 where
     Pk: Archive
         + for<'a> Serialize<
@@ -60,12 +60,12 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::page::{SpaceInfo, INNER_PAGE_SIZE};
+    use crate::page::{SpaceInfoPage, INNER_PAGE_SIZE};
     use crate::util::Persistable;
 
     #[test]
     fn test_as_bytes() {
-        let info = SpaceInfo {
+        let info = SpaceInfoPage {
             id: 0.into(),
             page_count: 0,
             name: "Test".to_string(),

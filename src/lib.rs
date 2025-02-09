@@ -14,7 +14,7 @@ pub use page::{
     parse_data_page, parse_index_page, parse_page, persist_page,
     seek_by_link, seek_to_page_start, update_at, DataPage,
     GeneralPage, GeneralHeader, IndexValue, Interval, PageType,
-    SpaceInfo, DATA_VERSION, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
+    SpaceInfoPage, DATA_VERSION, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
     TableOfContentsPage, IndexPage, get_index_page_size_from_data_length
 };
 pub use persistence::{PersistableIndex, PersistableTable};

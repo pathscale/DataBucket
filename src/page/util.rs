@@ -6,7 +6,7 @@ use rkyv::api::high::HighDeserializer;
 use rkyv::Archive;
 
 use super::index::IndexValue;
-use super::SpaceInfo;
+use super::SpaceInfoPage;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::{DataPage, GeneralPage, Link, IndexPage, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
@@ -238,15 +238,15 @@ where
 
 pub fn parse_space_info<const PAGE_SIZE: usize>(
     file: &mut std::fs::File,
-) -> eyre::Result<SpaceInfo> {
+) -> eyre::Result<SpaceInfoPage> {
     file.seek(io::SeekFrom::Start(0))?;
     let header = parse_general_header(file)?;
 
     let mut buffer = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer)?;
     let archived =
-        unsafe { rkyv::access_unchecked::<<SpaceInfo as Archive>::Archived>(&buffer[..]) };
-    let space_info: SpaceInfo =
+        unsafe { rkyv::access_unchecked::<<SpaceInfoPage as Archive>::Archived>(&buffer[..]) };
+    let space_info: SpaceInfoPage =
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
 
     Ok(space_info)
