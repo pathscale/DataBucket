@@ -9,7 +9,7 @@ use super::index::IndexValue;
 use super::SpaceInfoPage;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
-use crate::{DataPage, GeneralPage, Link, IndexPage, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::{DataPage, GeneralPage, IndexPage, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 pub fn map_index_pages_to_general<T>(pages: Vec<IndexPage<T>>) -> Vec<GeneralPage<IndexPage<T>>> {
     // We are starting ID's from `1` because `0`'s page in file is info page.

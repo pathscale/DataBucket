@@ -1,6 +1,6 @@
 use crate::link::{Link, LINK_LENGTH};
-use std::{mem, sync::Arc};
 use rkyv::util::AlignedVec;
+use std::{mem, sync::Arc};
 use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
@@ -127,7 +127,9 @@ impl<T: SizeMeasurable> SizeMeasurable for lockfree::set::Set<T> {
 }
 
 impl<T: SizeMeasurable> SizeMeasurable for Option<T>
-where T: SizeMeasurable{
+where
+    T: SizeMeasurable,
+{
     fn aligned_size(&self) -> usize {
         size_of::<Option<T>>()
     }

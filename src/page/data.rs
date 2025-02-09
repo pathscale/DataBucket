@@ -1,6 +1,6 @@
-use eyre::{eyre, Result};
 use crate::Link;
 use crate::Persistable;
+use eyre::{eyre, Result};
 
 #[derive(Debug)]
 pub struct DataPage<const DATA_LENGTH: usize> {
@@ -61,7 +61,7 @@ impl<const DATA_LENGTH: usize> Persistable for DataPage<DATA_LENGTH> {
         data.copy_from_slice(bytes);
         Self {
             length: bytes.len() as u32,
-            data
+            data,
         }
     }
 }

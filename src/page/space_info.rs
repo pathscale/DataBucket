@@ -1,12 +1,12 @@
 //! [`SpaceInfoPage`] declaration.
 
+use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-use rkyv::api::high::HighDeserializer;
 
 use crate::util::Persistable;
 use crate::{space, Link};
@@ -45,8 +45,7 @@ where
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
-    <Pk as rkyv::Archive>::Archived:
-    rkyv::Deserialize<Pk, HighDeserializer<rkyv::rancor::Error>>,
+    <Pk as rkyv::Archive>::Archived: rkyv::Deserialize<Pk, HighDeserializer<rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()

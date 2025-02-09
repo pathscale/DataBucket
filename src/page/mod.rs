@@ -6,22 +6,21 @@ mod space_info;
 mod ty;
 mod util;
 
+use data_bucket_codegen::SizeMeasure;
 use derive_more::{Display, From, Into};
 use rkyv::{Archive, Deserialize, Serialize};
-use data_bucket_codegen::SizeMeasure;
 
-use crate::{SizeMeasurable, align};
+use crate::{align, SizeMeasurable};
 
 pub use data::DataPage;
 pub use header::{GeneralHeader, DATA_VERSION};
-pub use index::{IndexValue, TableOfContentsPage, IndexPage, get_index_page_size_from_data_length};
+pub use index::{get_index_page_size_from_data_length, IndexPage, IndexValue, TableOfContentsPage};
 //pub use iterators::{DataIterator, LinksIterator};
 pub use space_info::{Interval, SpaceInfoPage};
 pub use ty::PageType;
 pub use util::{
     map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
-    parse_page, parse_space_info, persist_page,
-     seek_by_link, seek_to_page_start, update_at,
+    parse_page, parse_space_info, persist_page, seek_by_link, seek_to_page_start, update_at,
 };
 
 // TODO: Move to config
@@ -67,7 +66,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     PartialEq,
     PartialOrd,
     Serialize,
-    SizeMeasure
+    SizeMeasure,
 )]
 pub struct PageId(u32);
 
