@@ -3,9 +3,10 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
+use crate::page::PageId;
 use crate::space;
 use crate::util::Persistable;
-use crate::{page, PAGE_SIZE};
+use crate::PAGE_SIZE;
 
 pub const DATA_VERSION: u32 = 1u32;
 
@@ -16,15 +17,15 @@ pub const DATA_VERSION: u32 = 1u32;
 pub struct GeneralHeader {
     pub data_version: u32,
     pub space_id: space::Id,
-    pub page_id: page::PageId,
-    pub previous_id: page::PageId,
-    pub next_id: page::PageId,
+    pub page_id: PageId,
+    pub previous_id: PageId,
+    pub next_id: PageId,
     pub page_type: PageType,
     pub data_length: u32,
 }
 
 impl GeneralHeader {
-    pub fn new(page_id: page::PageId, type_: PageType, space_id: space::Id) -> Self {
+    pub fn new(page_id: PageId, type_: PageType, space_id: space::Id) -> Self {
         Self {
             data_version: DATA_VERSION,
             page_id,
@@ -38,7 +39,7 @@ impl GeneralHeader {
 
     /// Creates a new [`GeneralHeader`] for a page that follows page with given
     /// header. It means that [`PageType`] and [`space::Id`] are same and
-    /// old [`page::PageId`] will be `previous_id`.
+    /// old [`PageId`] will be `previous_id`.
     pub fn follow(&mut self) -> Self {
         self.next_id = self.page_id.next();
         Self {
@@ -54,7 +55,7 @@ impl GeneralHeader {
 
     /// Creates a new [`GeneralHeader`] for a page that follows page with given
     /// header but with different [`PageType`]. [`space::Id`] is same and old
-    /// [`page::PageId`] will be `previous_id`.
+    /// [`PageId`] will be `previous_id`.
     pub fn follow_with(&mut self, page_type: PageType) -> Self {
         self.next_id = self.page_id.next();
         Self {
@@ -67,11 +68,32 @@ impl GeneralHeader {
             data_length: PAGE_SIZE as u32,
         }
     }
+
+    /// Creates a new [`GeneralHeader`] for a page that follows page with given
+    /// header with provided [`PageId`], but with different [`PageType`].
+    /// [`space::Id`] is same and old [`PageId`] will be `previous_id`.
+    pub fn follow_with_page_id(&mut self, page_id: PageId) -> Self {
+        self.next_id = page_id;
+        Self {
+            data_version: DATA_VERSION,
+            page_id,
+            previous_id: self.page_id,
+            next_id: 0.into(),
+            page_type: self.page_type,
+            space_id: self.space_id,
+            data_length: PAGE_SIZE as u32,
+        }
+    }
 }
 
 impl Persistable for GeneralHeader {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
+        rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
     }
 }
 

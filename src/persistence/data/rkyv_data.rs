@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
     buf: &[u8],
-    columns: &Vec<(S1, S2)>,
+    columns: &[(S1, S2)],
 ) -> Vec<DataTypeValue> {
     let mut data_length: usize = {
         let mut accum: usize = 0;
@@ -39,6 +39,7 @@ mod test {
     use super::parse_archived_row;
     use crate::persistence::data::types::DataTypeValue;
     use rkyv::{Archive, Deserialize, Serialize};
+    use std::f64::consts::PI;
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
     struct Struct1 {
@@ -51,7 +52,7 @@ mod test {
             string1: "000000000000000".to_string(),
         })
         .unwrap();
-        let parsed = parse_archived_row(&buffer, &vec![("string1", "String")]);
+        let parsed = parse_archived_row(&buffer, &[("string1", "String")]);
         assert_eq!(
             parsed,
             [DataTypeValue::String("000000000000000".to_string())]
@@ -66,7 +67,7 @@ mod test {
     #[test]
     fn test_parse_archived_row_int() {
         let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct2 { int1: 3 }).unwrap();
-        let parsed = parse_archived_row(&buffer, &vec![("int1", "i32")]);
+        let parsed = parse_archived_row(&buffer, &[("int1", "i32")]);
         assert_eq!(parsed, [DataTypeValue::I32(3)])
     }
 
@@ -77,12 +78,9 @@ mod test {
 
     #[test]
     fn test_parse_archived_row_float() {
-        let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct3 {
-            float1: 3.14159265358,
-        })
-        .unwrap();
-        let parsed = parse_archived_row(&buffer, &vec![("float1", "f64")]);
-        assert_eq!(parsed, [DataTypeValue::F64(3.14159265358)])
+        let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct3 { float1: PI }).unwrap();
+        let parsed = parse_archived_row(&buffer, &[("float1", "f64")]);
+        assert_eq!(parsed, [DataTypeValue::F64(PI)])
     }
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
@@ -113,7 +111,7 @@ mod test {
             int6: 7,
             string3: "x".to_string(),
             int7: 8,
-            float1: 3.14159265358,
+            float1: PI,
         })
         .unwrap();
         let parsed = parse_archived_row(
@@ -145,7 +143,7 @@ mod test {
                 DataTypeValue::U8(7),
                 DataTypeValue::String("x".to_string()),
                 DataTypeValue::I8(8),
-                DataTypeValue::F64(3.14159265358f64),
+                DataTypeValue::F64(PI),
             ]
         )
     }

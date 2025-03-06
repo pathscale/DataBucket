@@ -1,6 +1,6 @@
-//! [`SpaceInfo`] declaration.
-use std::collections::HashMap;
+//! [`SpaceInfoPage`] declaration.
 
+use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::sharing::Share;
@@ -18,17 +18,14 @@ pub type SpaceName = String;
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
 #[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize)]
-pub struct SpaceInfo<Pk = ()> {
+pub struct SpaceInfoPage<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
+    pub pk_gen_state: Pk,
     pub name: SpaceName,
     pub row_schema: Vec<(String, String)>,
     pub primary_key_fields: Vec<String>,
-    pub primary_key_intervals: Vec<Interval>,
     pub secondary_index_types: Vec<(String, String)>,
-    pub secondary_index_intervals: HashMap<String, Vec<Interval>>,
-    pub data_intervals: Vec<Interval>,
-    pub pk_gen_state: Pk,
     pub empty_links_list: Vec<Link>,
 }
 
@@ -42,37 +39,38 @@ impl Interval {
     }
 }
 
-impl<Pk> Persistable for SpaceInfo<Pk>
+impl<Pk> Persistable for SpaceInfoPage<Pk>
 where
     Pk: Archive
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
+    <Pk as rkyv::Archive>::Archived: rkyv::Deserialize<Pk, HighDeserializer<rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
+        rkyv::deserialize(archived).expect("data should be valid")
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
-
-    use crate::page::{SpaceInfo, INNER_PAGE_SIZE};
+    use crate::page::{SpaceInfoPage, INNER_PAGE_SIZE};
     use crate::util::Persistable;
 
     #[test]
     fn test_as_bytes() {
-        let info = SpaceInfo {
+        let info = SpaceInfoPage {
             id: 0.into(),
             page_count: 0,
             name: "Test".to_string(),
             row_schema: vec![],
             primary_key_fields: vec![],
-            primary_key_intervals: vec![],
-            secondary_index_intervals: HashMap::new(),
-            data_intervals: vec![],
-            pk_gen_state: (),
+            pk_gen_state: 0u128,
             empty_links_list: vec![],
             secondary_index_types: vec![],
         };

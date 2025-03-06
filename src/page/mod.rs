@@ -1,23 +1,26 @@
 mod data;
 mod header;
 mod index;
-mod iterators;
+//mod iterators;
 mod space_info;
 mod ty;
 mod util;
-use derive_more::{Display, From};
+
+use data_bucket_codegen::SizeMeasure;
+use derive_more::{Display, From, Into};
 use rkyv::{Archive, Deserialize, Serialize};
 
-pub use data::Data;
+use crate::{align, SizeMeasurable};
+
+pub use data::DataPage;
 pub use header::{GeneralHeader, DATA_VERSION};
-pub use index::{map_tree_index, IndexPage, IndexValue};
-pub use iterators::{DataIterator, LinksIterator, PageIterator};
-pub use space_info::{Interval, SpaceInfo};
+pub use index::{get_index_page_size_from_data_length, IndexPage, IndexValue, TableOfContentsPage};
+//pub use iterators::{DataIterator, LinksIterator};
+pub use space_info::{Interval, SpaceInfoPage};
 pub use ty::PageType;
 pub use util::{
     map_data_pages_to_general, map_index_pages_to_general, parse_data_page, parse_index_page,
-    parse_page, parse_space_info, persist_page, read_data_pages, read_index_pages,
-    read_rows_schema, seek_by_link, seek_to_page_start, update_at,
+    parse_page, parse_space_info, persist_page, seek_by_link, seek_to_page_start, update_at,
 };
 
 // TODO: Move to config
@@ -42,8 +45,8 @@ pub const PAGE_SIZE: usize = 4096 * 4;
 /// **2 bytes are added by rkyv implicitly.**
 pub const GENERAL_HEADER_SIZE: usize = 28;
 
-/// Length of the inner part of [`General`] page. It's counted as [`PAGE_SIZE`]
-/// without [`General`] page [`GENERAL_HEADER_SIZE`].
+/// Length of the inner part of [`GeneralPage`] page. It's counted as [`PAGE_SIZE`]
+/// without [`GeneralPage`] page [`GENERAL_HEADER_SIZE`].
 pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
 
 /// Represents page's identifier. Is unique within the table bounds
@@ -58,16 +61,22 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     Eq,
     From,
     Hash,
+    Into,
     Ord,
     PartialEq,
     PartialOrd,
     Serialize,
+    SizeMeasure,
 )]
 pub struct PageId(u32);
 
 impl PageId {
     pub fn next(self) -> Self {
         PageId(self.0 + 1)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0 == 0
     }
 }
 
@@ -81,7 +90,7 @@ impl From<PageId> for usize {
 #[derive(
     Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
 )]
-pub struct General<Inner> {
+pub struct GeneralPage<Inner> {
     pub header: GeneralHeader,
     pub inner: Inner,
 }

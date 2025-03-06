@@ -1,15 +1,14 @@
-use eyre::{eyre, Result};
-
 use crate::Link;
 use crate::Persistable;
+use eyre::{eyre, Result};
 
 #[derive(Debug)]
-pub struct Data<const DATA_LENGTH: usize> {
+pub struct DataPage<const DATA_LENGTH: usize> {
     pub length: u32,
     pub data: [u8; DATA_LENGTH],
 }
 
-impl<const DATA_LENGTH: usize> Data<DATA_LENGTH> {
+impl<const DATA_LENGTH: usize> DataPage<DATA_LENGTH> {
     pub fn update_at(&mut self, link: Link, new_data: &[u8]) -> Result<()> {
         if new_data.len() as u32 != link.length {
             return Err(eyre!(
@@ -52,9 +51,18 @@ impl<const DATA_LENGTH: usize> Data<DATA_LENGTH> {
     }
 }
 
-impl<const DATA_LENGTH: usize> Persistable for Data<DATA_LENGTH> {
+impl<const DATA_LENGTH: usize> Persistable for DataPage<DATA_LENGTH> {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         &self.data[..self.length as usize]
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let mut data = [0; DATA_LENGTH];
+        data.copy_from_slice(bytes);
+        Self {
+            length: bytes.len() as u32,
+            data,
+        }
     }
 }
 
@@ -64,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_update_at_success() {
-        let mut data = Data {
+        let mut data = DataPage {
             length: 0,
             data: [0; 100],
         };
@@ -82,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_update_at_wrong_length() {
-        let mut data = Data {
+        let mut data = DataPage {
             length: 0,
             data: [0; 100],
         };
@@ -101,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_update_at_out_of_bounds() {
-        let mut data = Data {
+        let mut data = DataPage {
             length: 0,
             data: [0; 100],
         };
@@ -120,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_get_at_out_of_bounds() {
-        let data = Data {
+        let data = DataPage {
             length: 0,
             data: [0; 100],
         };

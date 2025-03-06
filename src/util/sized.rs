@@ -1,4 +1,5 @@
 use crate::link::{Link, LINK_LENGTH};
+use rkyv::util::AlignedVec;
 use std::{mem, sync::Arc};
 use uuid::Uuid;
 
@@ -8,6 +9,25 @@ pub const fn align(len: usize) -> usize {
     } else {
         (len / 4 + 1) * 4
     }
+}
+
+pub const fn align8(len: usize) -> usize {
+    if len % 8 == 0 {
+        len
+    } else {
+        (len / 8 + 1) * 8
+    }
+}
+
+pub fn align_vec<const ALIGNMENT: usize>(mut v: AlignedVec<ALIGNMENT>) -> AlignedVec<ALIGNMENT> {
+    if v.len() != align(v.len()) {
+        let count = align(v.len()) - v.len();
+        for _ in 0..count {
+            v.push(0)
+        }
+    }
+
+    v
 }
 
 /// Marks an objects that can return theirs approximate size after archiving via
@@ -76,14 +96,42 @@ impl SizeMeasurable for String {
     }
 }
 
+impl<T> SizeMeasurable for Vec<T>
+where
+    T: SizeMeasurable + Default,
+{
+    fn aligned_size(&self) -> usize {
+        let val_size = T::default().aligned_size();
+        let vec_content_size = if val_size == 2 {
+            2
+        } else if val_size == 4 {
+            4
+        } else {
+            align8(val_size)
+        };
+
+        align(self.len() * vec_content_size) + 8
+    }
+}
+
 impl<T: SizeMeasurable> SizeMeasurable for Arc<T> {
     fn aligned_size(&self) -> usize {
         self.as_ref().aligned_size()
     }
 }
+
 impl<T: SizeMeasurable> SizeMeasurable for lockfree::set::Set<T> {
     fn aligned_size(&self) -> usize {
         self.iter().map(|elem| elem.aligned_size()).sum()
+    }
+}
+
+impl<T: SizeMeasurable> SizeMeasurable for Option<T>
+where
+    T: SizeMeasurable,
+{
+    fn aligned_size(&self) -> usize {
+        size_of::<Option<T>>()
     }
 }
 
