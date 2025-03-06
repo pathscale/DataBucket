@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
     buf: &[u8],
-    columns: &Vec<(S1, S2)>,
+    columns: &[(S1, S2)],
 ) -> Vec<DataTypeValue> {
     let mut data_length: usize = {
         let mut accum: usize = 0;

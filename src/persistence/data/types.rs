@@ -52,7 +52,7 @@ impl FromStr for DataTypeValue {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.as_ref() {
+        Ok(match s {
             "String" => String::default().into(),
             "i128" => i128::default().into(),
             "i64" => i64::default().into(),

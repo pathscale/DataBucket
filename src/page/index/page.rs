@@ -28,9 +28,7 @@ where
     let slot_size = u16::default().aligned_size();
     let index_value_size = align8(T::default().aligned_size() + Link::default().aligned_size());
     let vec_util_size = 8;
-    let size = (length - node_id_size - slot_size * 3 - vec_util_size * 2)
-        / (slot_size + index_value_size);
-    size
+    (length - node_id_size - slot_size * 3 - vec_util_size * 2) / (slot_size + index_value_size)
 }
 
 /// Represents a page, which is filled with [`IndexValue`]'s of some index.
@@ -127,14 +125,14 @@ impl<T> IndexPage<T> {
         let current_index =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
-        offset = offset + 2;
+        offset += 2;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(&bytes[offset..offset + 2]);
         let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&v[..]) };
         let current_length =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
-        offset = offset + 2;
+        offset += 2;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(&bytes[offset..]);
         let archived = unsafe { rkyv::access_unchecked::<<Vec<u16> as Archive>::Archived>(&v[..]) };
@@ -195,13 +193,13 @@ impl<T> IndexPage<T> {
         ))?;
 
         let node_id_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.node_id)?;
-        file.write(node_id_bytes.as_slice())?;
+        file.write_all(node_id_bytes.as_slice())?;
         let current_index_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_index)?;
-        file.write(current_index_bytes.as_slice())?;
+        file.write_all(current_index_bytes.as_slice())?;
         let current_length_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_length)?;
-        file.write(current_length_bytes.as_slice())?;
+        file.write_all(current_length_bytes.as_slice())?;
         let slots_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.slots)?;
-        file.write(slots_bytes.as_slice())?;
+        file.write_all(slots_bytes.as_slice())?;
         Ok(())
     }
 
@@ -273,7 +271,7 @@ impl<T> IndexPage<T> {
         let offset = Self::get_value_offset(size, value_index as usize);
         file.seek(SeekFrom::Current(offset as i64))?;
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        file.write(bytes.as_slice())?;
+        file.write_all(bytes.as_slice())?;
 
         if value_index != size as u16 - 1 {
             let mut value = Self::read_value(file)?;
@@ -308,7 +306,7 @@ impl<T> IndexPage<T> {
         file.seek(SeekFrom::Current(offset as i64))?;
         let value = IndexValue::<T>::default();
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        file.write(bytes.as_slice())?;
+        file.write_all(bytes.as_slice())?;
 
         Ok(())
     }
@@ -324,7 +322,7 @@ impl<T> IndexPage<T> {
         node
     }
 
-    pub fn from_node(node: &Vec<impl Into<IndexValue<T>> + Clone>, size: usize) -> Self
+    pub fn from_node(node: &[impl Into<IndexValue<T>> + Clone], size: usize) -> Self
     where
         T: Clone + Ord + Default,
     {

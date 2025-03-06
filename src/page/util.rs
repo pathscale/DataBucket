@@ -19,7 +19,7 @@ pub fn map_index_pages_to_general<T>(pages: Vec<IndexPage<T>>) -> Vec<GeneralPag
     let mut pages = pages.into_iter();
     if let Some(p) = pages.next() {
         let general = GeneralPage {
-            header: header.clone(),
+            header: *header,
             inner: p,
         };
         general_pages.push(general);
@@ -49,7 +49,7 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     let mut pages = pages.into_iter();
     if let Some(p) = pages.next() {
         let general = GeneralPage {
-            header: header.clone(),
+            header: *header,
             inner: p,
         };
         general_pages.push(general);
@@ -128,7 +128,7 @@ pub fn update_at<const DATA_LENGTH: u32>(
     }
 
     seek_by_link(file, link)?;
-    file.write(new_data)?;
+    file.write_all(new_data)?;
     Ok(())
 }
 
@@ -179,6 +179,7 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
 
     let mut buffer = [0u8; INNER_PAGE_SIZE];
     if header.next_id == 0.into() {
+        #[allow(clippy::unused_io_amount)]
         file.read(&mut buffer)?;
     } else {
         file.read_exact(&mut buffer)?;

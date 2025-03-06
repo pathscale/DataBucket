@@ -85,11 +85,9 @@ impl<T> TableOfContentsPage<T> {
         self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
         self.estimated_size += PageId::default().0.aligned_size();
 
-        let id = self
-            .records
+        self.records
             .remove(val)
-            .expect("value should be available if remove is called");
-        id
+            .expect("value should be available if remove is called")
     }
 
     pub fn update_key(&mut self, old_key: &T, new_key: T)
@@ -139,7 +137,7 @@ where
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(&bytes[..]) };
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
         rkyv::deserialize(archived).expect("data should be valid")
     }
 }

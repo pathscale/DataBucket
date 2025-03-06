@@ -52,7 +52,7 @@ where
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(&bytes[..]) };
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
         rkyv::deserialize(archived).expect("data should be valid")
     }
 }

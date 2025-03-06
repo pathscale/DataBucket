@@ -92,7 +92,7 @@ impl Persistable for GeneralHeader {
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(&bytes[..]) };
+        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
     }
 }
