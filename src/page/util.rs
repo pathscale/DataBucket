@@ -105,7 +105,7 @@ pub fn seek_by_link(file: &mut std::fs::File, link: Link) -> eyre::Result<()> {
     Ok(())
 }
 
-pub fn update_at<const DATA_LENGTH: usize>(
+pub fn update_at<const DATA_LENGTH: u32>(
     file: &mut std::fs::File,
     link: Link,
     new_data: &[u8],
@@ -118,7 +118,7 @@ pub fn update_at<const DATA_LENGTH: usize>(
         ));
     }
 
-    if (link.offset + link.length) as usize > DATA_LENGTH {
+    if (link.offset + link.length) > DATA_LENGTH {
         return Err(eyre!(
             "Link range (offset: {}, length: {}) exceeds data bounds ({})",
             link.offset,
@@ -154,8 +154,13 @@ where
 {
     seek_to_page_start(file, index)?;
     let header = parse_general_header(file)?;
+    let length = if header.data_length == 0 {
+        PAGE_SIZE
+    } else {
+        header.data_length
+    };
 
-    let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
+    let mut buffer: Vec<u8> = vec![0u8; length as usize];
     file.read_exact(&mut buffer)?;
     let info = Page::from_bytes(buffer.as_ref());
 

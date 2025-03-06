@@ -21,11 +21,11 @@ pub type SpaceName = String;
 pub struct SpaceInfoPage<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
+    pub pk_gen_state: Pk,
     pub name: SpaceName,
     pub row_schema: Vec<(String, String)>,
     pub primary_key_fields: Vec<String>,
     pub secondary_index_types: Vec<(String, String)>,
-    pub pk_gen_state: Pk,
     pub empty_links_list: Vec<Link>,
 }
 
