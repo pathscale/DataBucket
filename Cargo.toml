@@ -11,17 +11,11 @@ repository = "https://github.com/pathscale/DataBucket"
 description = "DataBucket is container for WorkTable's data"
 
 [dependencies]
-data_bucket_derive = {path = "codegen" , version = "0.1.0"}
+data_bucket_derive = { path = "codegen", version = "0.1.0" }
 
 eyre = "0.6.12"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
-rkyv = { version = "0.8.9", features = ["uuid-1"]}
-scc = "2.1.16"
+rkyv = { version = "0.8.9", features = ["uuid-1"] }
 lockfree = "0.5.1"
-serde = { version = "1.0.215", features = ["derive"] }
 uuid = { version = "1.11.0", features = ["v4"] }
-bitcode = "0.6.3"
-indexset = { path = "../indexset", version = "0.10.3", features = ["concurrent", "cdc", "multimap"] }
-
-[dev-dependencies]
-mktemp = "0.4.0"
+indexset = { version = "0.11.1", features = ["concurrent", "cdc", "multimap"] }
