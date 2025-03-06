@@ -421,9 +421,7 @@ mod tests {
         let slot_size = u16::default().aligned_size();
         let index_value_size = align8(T::default().aligned_size() + Link::default().aligned_size());
         let vec_util_size = 8;
-        let size = (length - node_id_size - slot_size * 2 - vec_util_size * 2)
-            / (slot_size + index_value_size);
-        size
+        (length - node_id_size - slot_size * 2 - vec_util_size * 2) / (slot_size + index_value_size)
     }
 
     #[test]
