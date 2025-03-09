@@ -1,11 +1,14 @@
 //! [`crate::page::IndexPage`] definition.
 
 use std::fmt::Debug;
-use std::fs::File;
 use std::hash::Hash;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::SeekFrom;
 use std::mem;
 
+use crate::page::{IndexValue, PageId};
+use crate::{
+    align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE,
+};
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
 use rkyv::rancor::Strategy;
@@ -14,11 +17,8 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-
-use crate::page::{IndexValue, PageId};
-use crate::{
-    align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE,
-};
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 pub fn get_index_page_size_from_data_length<T>(length: usize) -> usize
 where
@@ -147,7 +147,7 @@ impl<T> IndexPage<T> {
         }
     }
 
-    pub fn parse_index_page_utility(
+    pub async fn parse_index_page_utility(
         file: &mut File,
         page_id: PageId,
     ) -> eyre::Result<IndexPageUtility<T>>
@@ -155,12 +155,12 @@ impl<T> IndexPage<T> {
         T: Archive + Default + SizeMeasurable,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
     {
-        seek_to_page_start(file, page_id.0)?;
+        seek_to_page_start(file, page_id.0).await?;
         let offset = GENERAL_HEADER_SIZE as i64;
-        file.seek(SeekFrom::Current(offset))?;
+        file.seek(SeekFrom::Current(offset)).await?;
 
         let mut size_bytes = vec![0u8; 2];
-        file.read_exact(size_bytes.as_mut_slice())?;
+        file.read_exact(size_bytes.as_mut_slice()).await?;
         let archived =
             unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&size_bytes[0..2]) };
         let size =
@@ -168,13 +168,13 @@ impl<T> IndexPage<T> {
 
         let index_utility_len = Self::index_page_utility_length(size as usize);
         let mut index_utility_bytes = vec![0u8; index_utility_len];
-        file.read_exact(index_utility_bytes.as_mut_slice())?;
+        file.read_exact(index_utility_bytes.as_mut_slice()).await?;
         let utility = Self::get_index_page_utility_from_bytes(index_utility_bytes.as_ref());
 
         Ok(utility)
     }
 
-    pub fn persist_index_page_utility(
+    pub async fn persist_index_page_utility(
         file: &mut File,
         page_id: PageId,
         utility: IndexPageUtility<T>,
@@ -187,29 +187,36 @@ impl<T> IndexPage<T> {
                 Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
             >,
     {
-        seek_to_page_start(file, page_id.0)?;
+        seek_to_page_start(file, page_id.0).await?;
         file.seek(SeekFrom::Current(
             GENERAL_HEADER_SIZE as i64 + u16::default().aligned_size() as i64,
-        ))?;
+        ))
+        .await?;
 
-        let node_id_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.node_id)?;
-        file.write_all(node_id_bytes.as_slice())?;
-        let current_index_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_index)?;
-        file.write_all(current_index_bytes.as_slice())?;
-        let current_length_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_length)?;
-        file.write_all(current_length_bytes.as_slice())?;
-        let slots_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&utility.slots)?;
-        file.write_all(slots_bytes.as_slice())?;
+        let mut bytes = vec![];
+        bytes.copy_from_slice(
+            &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.node_id)?.as_slice(),
+        );
+        bytes.copy_from_slice(
+            &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_index)?.as_slice(),
+        );
+        bytes.copy_from_slice(
+            &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_length)?.as_slice(),
+        );
+        bytes.copy_from_slice(
+            &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.slots)?.as_slice(),
+        );
+        file.write_all(bytes.as_slice()).await?;
         Ok(())
     }
 
-    fn read_value(file: &mut File) -> eyre::Result<IndexValue<T>>
+    async fn read_value(file: &mut File) -> eyre::Result<IndexValue<T>>
     where
         T: Archive + Default + SizeMeasurable,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
     {
         let mut bytes = vec![0u8; align8(IndexValue::<T>::default().aligned_size())];
-        file.read_exact(bytes.as_mut_slice())?;
+        file.read_exact(bytes.as_mut_slice()).await?;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(bytes.as_slice());
         let archived =
@@ -217,7 +224,7 @@ impl<T> IndexPage<T> {
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
-    pub fn read_value_with_index(
+    pub async fn read_value_with_index(
         file: &mut File,
         page_id: PageId,
         size: usize,
@@ -227,11 +234,11 @@ impl<T> IndexPage<T> {
         T: Archive + Default + SizeMeasurable,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
     {
-        seek_to_page_start(file, page_id.0)?;
+        seek_to_page_start(file, page_id.0).await?;
 
         let offset = Self::get_value_offset(size, index);
-        file.seek(SeekFrom::Current(offset as i64))?;
-        Self::read_value(file)
+        file.seek(SeekFrom::Current(offset as i64)).await?;
+        Self::read_value(file).await
     }
 
     fn get_value_offset(size: usize, value_index: usize) -> usize
@@ -249,7 +256,7 @@ impl<T> IndexPage<T> {
         offset
     }
 
-    pub fn persist_value(
+    pub async fn persist_value(
         file: &mut File,
         page_id: PageId,
         size: usize,
@@ -266,25 +273,25 @@ impl<T> IndexPage<T> {
             >,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
     {
-        seek_to_page_start(file, page_id.0)?;
+        seek_to_page_start(file, page_id.0).await?;
 
         let offset = Self::get_value_offset(size, value_index as usize);
-        file.seek(SeekFrom::Current(offset as i64))?;
+        file.seek(SeekFrom::Current(offset as i64)).await?;
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        file.write_all(bytes.as_slice())?;
+        file.write_all(bytes.as_slice()).await?;
 
         if value_index != size as u16 - 1 {
-            let mut value = Self::read_value(file)?;
+            let mut value = Self::read_value(file).await?;
             while value != IndexValue::default() {
                 value_index += 1;
-                value = Self::read_value(file)?;
+                value = Self::read_value(file).await?;
             }
         }
 
         Ok(value_index + 1)
     }
 
-    pub fn remove_value(
+    pub async fn remove_value(
         file: &mut File,
         page_id: PageId,
         size: usize,
@@ -300,13 +307,13 @@ impl<T> IndexPage<T> {
             >,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
     {
-        seek_to_page_start(file, page_id.0)?;
+        seek_to_page_start(file, page_id.0).await?;
 
         let offset = Self::get_value_offset(size, value_index as usize);
-        file.seek(SeekFrom::Current(offset as i64))?;
+        file.seek(SeekFrom::Current(offset as i64)).await?;
         let value = IndexValue::<T>::default();
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        file.write_all(bytes.as_slice())?;
+        file.write_all(bytes.as_slice()).await?;
 
         Ok(())
     }
