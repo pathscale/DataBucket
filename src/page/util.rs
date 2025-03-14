@@ -1,9 +1,9 @@
-use std::io;
-use std::io::prelude::*;
-
 use eyre::eyre;
 use rkyv::api::high::HighDeserializer;
 use rkyv::Archive;
+use std::io::SeekFrom;
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use super::index::IndexValue;
 use super::SpaceInfoPage;
@@ -69,44 +69,48 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     general_pages
 }
 
-pub fn persist_page<T>(page: &mut GeneralPage<T>, file: &mut std::fs::File) -> eyre::Result<()>
+pub async fn persist_page<'a, T>(
+    page: &'a mut GeneralPage<T>,
+    file: &'a mut File,
+) -> eyre::Result<()>
 where
-    T: Persistable,
+    T: Persistable + Send + Sync,
 {
-    use std::io::prelude::*;
-
-    seek_to_page_start(file, page.header.page_id.0)?;
+    seek_to_page_start(file, page.header.page_id.0).await?;
 
     let page_count = page.header.page_id.0 as i64 + 1;
     let inner_bytes = page.inner.as_bytes();
     page.header.data_length = inner_bytes.as_ref().len() as u32;
 
-    file.write_all(page.header.as_bytes().as_ref())?;
-    file.write_all(inner_bytes.as_ref())?;
-    let curr_position = file.stream_position()?;
-    file.seek(io::SeekFrom::Current(
+    file.write_all(page.header.as_bytes().as_ref()).await?;
+    file.write_all(inner_bytes.as_ref()).await?;
+    let curr_position = file.stream_position().await?;
+    file.seek(SeekFrom::Current(
         (page_count * PAGE_SIZE as i64) - curr_position as i64,
-    ))?;
+    ))
+    .await?;
 
     Ok(())
 }
 
-pub fn seek_to_page_start(file: &mut std::fs::File, index: u32) -> eyre::Result<()> {
-    file.seek(io::SeekFrom::Start(index as u64 * PAGE_SIZE as u64))?;
+pub async fn seek_to_page_start(file: &mut File, index: u32) -> eyre::Result<()> {
+    file.seek(SeekFrom::Start(index as u64 * PAGE_SIZE as u64))
+        .await?;
 
     Ok(())
 }
 
-pub fn seek_by_link(file: &mut std::fs::File, link: Link) -> eyre::Result<()> {
-    file.seek(io::SeekFrom::Start(
+pub async fn seek_by_link(file: &mut File, link: Link) -> eyre::Result<()> {
+    file.seek(SeekFrom::Start(
         link.page_id.0 as u64 * PAGE_SIZE as u64 + GENERAL_HEADER_SIZE as u64 + link.offset as u64,
-    ))?;
+    ))
+    .await?;
 
     Ok(())
 }
 
-pub fn update_at<const DATA_LENGTH: u32>(
-    file: &mut std::fs::File,
+pub async fn update_at<const DATA_LENGTH: u32>(
+    file: &mut File,
     link: Link,
     new_data: &[u8],
 ) -> eyre::Result<()> {
@@ -127,14 +131,14 @@ pub fn update_at<const DATA_LENGTH: u32>(
         ));
     }
 
-    seek_by_link(file, link)?;
-    file.write_all(new_data)?;
+    seek_by_link(file, link).await?;
+    file.write_all(new_data).await?;
     Ok(())
 }
 
-pub fn parse_general_header(file: &mut std::fs::File) -> eyre::Result<GeneralHeader> {
+pub async fn parse_general_header(file: &mut File) -> eyre::Result<GeneralHeader> {
     let mut buffer = [0; GENERAL_HEADER_SIZE];
-    file.read_exact(&mut buffer)?;
+    file.read_exact(&mut buffer).await?;
     let archived =
         unsafe { rkyv::access_unchecked::<<GeneralHeader as Archive>::Archived>(&buffer[..]) };
     let header =
@@ -143,8 +147,8 @@ pub fn parse_general_header(file: &mut std::fs::File) -> eyre::Result<GeneralHea
     Ok(header)
 }
 
-pub fn parse_page<Page, const PAGE_SIZE: u32>(
-    file: &mut std::fs::File,
+pub async fn parse_page<Page, const PAGE_SIZE: u32>(
+    file: &mut File,
     index: u32,
 ) -> eyre::Result<GeneralPage<Page>>
 where
@@ -152,8 +156,8 @@ where
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
 {
-    seek_to_page_start(file, index)?;
-    let header = parse_general_header(file)?;
+    seek_to_page_start(file, index).await?;
+    let header = parse_general_header(file).await?;
     let length = if header.data_length == 0 {
         PAGE_SIZE
     } else {
@@ -161,7 +165,7 @@ where
     };
 
     let mut buffer: Vec<u8> = vec![0u8; length as usize];
-    file.read_exact(&mut buffer)?;
+    file.read_exact(&mut buffer).await?;
     let info = Page::from_bytes(buffer.as_ref());
 
     Ok(GeneralPage {
@@ -170,19 +174,19 @@ where
     })
 }
 
-pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
-    file: &mut std::fs::File,
+pub async fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
+    file: &mut File,
     index: u32,
 ) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
-    seek_to_page_start(file, index)?;
-    let header = parse_general_header(file)?;
+    seek_to_page_start(file, index).await?;
+    let header = parse_general_header(file).await?;
 
     let mut buffer = [0u8; INNER_PAGE_SIZE];
     if header.next_id == 0.into() {
         #[allow(clippy::unused_io_amount)]
-        file.read(&mut buffer)?;
+        file.read(&mut buffer).await?;
     } else {
-        file.read_exact(&mut buffer)?;
+        file.read_exact(&mut buffer).await?;
     }
 
     let data = DataPage {
@@ -220,19 +224,19 @@ pub fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
 //     Ok(parsed_record)
 // }
 
-pub fn parse_index_page<T, const PAGE_SIZE: usize>(
-    file: &mut std::fs::File,
+pub async fn parse_index_page<T, const PAGE_SIZE: usize>(
+    file: &mut File,
     index: u32,
 ) -> eyre::Result<Vec<IndexValue<T>>>
 where
     T: Archive,
     <T as rkyv::Archive>::Archived: rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>>,
 {
-    seek_to_page_start(file, index)?;
-    let header = parse_general_header(file)?;
+    seek_to_page_start(file, index).await?;
+    let header = parse_general_header(file).await?;
 
     let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
-    file.read_exact(&mut buffer)?;
+    file.read_exact(&mut buffer).await?;
     let archived =
         unsafe { rkyv::access_unchecked::<<IndexPage<T> as Archive>::Archived>(&buffer[..]) };
     let index_records: Vec<IndexValue<T>> = rkyv::deserialize::<IndexPage<T>, _>(archived)
@@ -242,14 +246,14 @@ where
     Ok(index_records)
 }
 
-pub fn parse_space_info<const PAGE_SIZE: usize>(
-    file: &mut std::fs::File,
+pub async fn parse_space_info<const PAGE_SIZE: usize>(
+    file: &mut File,
 ) -> eyre::Result<SpaceInfoPage> {
-    file.seek(io::SeekFrom::Start(0))?;
-    let header = parse_general_header(file)?;
+    file.seek(SeekFrom::Start(0)).await?;
+    let header = parse_general_header(file).await?;
 
     let mut buffer = vec![0u8; header.data_length as usize];
-    file.read_exact(&mut buffer)?;
+    file.read_exact(&mut buffer).await?;
     let archived =
         unsafe { rkyv::access_unchecked::<<SpaceInfoPage as Archive>::Archived>(&buffer[..]) };
     let space_info: SpaceInfoPage =

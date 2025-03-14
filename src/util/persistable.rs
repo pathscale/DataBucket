@@ -1,4 +1,5 @@
 use crate::SizeMeasurable;
+
 use rkyv::de::Pool;
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
@@ -8,7 +9,7 @@ use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 
 pub trait Persistable {
-    fn as_bytes(&self) -> impl AsRef<[u8]>;
+    fn as_bytes(&self) -> impl AsRef<[u8]> + Send;
     fn from_bytes(bytes: &[u8]) -> Self;
 }
 
