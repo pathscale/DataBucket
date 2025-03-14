@@ -194,16 +194,16 @@ impl<T> IndexPage<T> {
         .await?;
 
         let mut bytes = vec![];
-        bytes.copy_from_slice(
+        bytes.extend_from_slice(
             &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.node_id)?.as_slice(),
         );
-        bytes.copy_from_slice(
+        bytes.extend_from_slice(
             &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_index)?.as_slice(),
         );
-        bytes.copy_from_slice(
+        bytes.extend_from_slice(
             &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.current_length)?.as_slice(),
         );
-        bytes.copy_from_slice(
+        bytes.extend_from_slice(
             &mut rkyv::to_bytes::<rkyv::rancor::Error>(&utility.slots)?.as_slice(),
         );
         file.write_all(bytes.as_slice()).await?;
