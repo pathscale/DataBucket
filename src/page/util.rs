@@ -1,7 +1,6 @@
 use eyre::eyre;
 use rkyv::api::high::HighDeserializer;
 use rkyv::Archive;
-use std::future::Future;
 use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -70,30 +69,28 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     general_pages
 }
 
-pub fn persist_page<'a, T>(
+pub async fn persist_page<'a, T>(
     page: &'a mut GeneralPage<T>,
     file: &'a mut File,
-) -> impl Future<Output = eyre::Result<()>> + Send + use<'a, T>
+) -> eyre::Result<()>
 where
     T: Persistable + Send + Sync,
 {
-    async {
-        seek_to_page_start(file, page.header.page_id.0).await?;
+    seek_to_page_start(file, page.header.page_id.0).await?;
 
-        let page_count = page.header.page_id.0 as i64 + 1;
-        let inner_bytes = page.inner.as_bytes();
-        page.header.data_length = inner_bytes.as_ref().len() as u32;
+    let page_count = page.header.page_id.0 as i64 + 1;
+    let inner_bytes = page.inner.as_bytes();
+    page.header.data_length = inner_bytes.as_ref().len() as u32;
 
-        file.write_all(page.header.as_bytes().as_ref()).await?;
-        file.write_all(inner_bytes.as_ref()).await?;
-        let curr_position = file.stream_position().await?;
-        file.seek(SeekFrom::Current(
-            (page_count * PAGE_SIZE as i64) - curr_position as i64,
-        ))
-        .await?;
+    file.write_all(page.header.as_bytes().as_ref()).await?;
+    file.write_all(inner_bytes.as_ref()).await?;
+    let curr_position = file.stream_position().await?;
+    file.seek(SeekFrom::Current(
+        (page_count * PAGE_SIZE as i64) - curr_position as i64,
+    ))
+    .await?;
 
-        Ok(())
-    }
+    Ok(())
 }
 
 pub async fn seek_to_page_start(file: &mut File, index: u32) -> eyre::Result<()> {
