@@ -174,6 +174,16 @@ where
     })
 }
 
+pub async fn parse_general_header_by_index(
+    file: &mut File,
+    index: u32,
+) -> eyre::Result<GeneralHeader> {
+    seek_to_page_start(file, index).await?;
+    let header = parse_general_header(file).await?;
+
+    Ok(header)
+}
+
 pub async fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
     file: &mut File,
     index: u32,
