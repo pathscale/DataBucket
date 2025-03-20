@@ -319,8 +319,8 @@ impl<T> IndexPage<T> {
     where
         T: Clone + Ord,
     {
-        let mut node = Vec::with_capacity(self.size as usize);
-        for slot in &self.slots[..self.current_index as usize] {
+        let mut node = Vec::with_capacity(self.current_length as usize);
+        for slot in &self.slots[..self.current_length as usize] {
             node.push(self.index_values[*slot as usize].clone().into())
         }
         node
