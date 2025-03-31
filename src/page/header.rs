@@ -1,5 +1,6 @@
 //! [`GeneralHeader`] definitions.
 
+use data_bucket_codegen::Persistable;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::ty::PageType;
@@ -12,7 +13,18 @@ pub const DATA_VERSION: u32 = 1u32;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
-    Archive, Copy, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+    Archive,
+    Copy,
+    Clone,
+    Deserialize,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Persistable,
 )]
 pub struct GeneralHeader {
     pub data_version: u32,
@@ -83,17 +95,6 @@ impl GeneralHeader {
             space_id: self.space_id,
             data_length: PAGE_SIZE as u32,
         }
-    }
-}
-
-impl Persistable for GeneralHeader {
-    fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
-        rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
     }
 }
 

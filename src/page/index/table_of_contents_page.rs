@@ -1,18 +1,13 @@
 use std::collections::BTreeMap;
 
-use rkyv::api::high::HighDeserializer;
-use rkyv::rancor::Strategy;
-use rkyv::ser::allocator::ArenaHandle;
-use rkyv::ser::sharing::Share;
-use rkyv::ser::Serializer;
-use rkyv::util::AlignedVec;
+use data_bucket_codegen::Persistable;
 use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::page::PageId;
 use crate::{align, Persistable, SizeMeasurable};
 
-#[derive(Archive, Clone, Deserialize, Debug, Serialize)]
-pub struct TableOfContentsPage<T> {
+#[derive(Archive, Clone, Deserialize, Debug, Serialize, Persistable)]
+pub struct TableOfContentsPage<T: Ord + Eq> {
     records: BTreeMap<T, PageId>,
 
     empty_pages: Vec<PageId>,
@@ -21,7 +16,7 @@ pub struct TableOfContentsPage<T> {
 
 impl<T> Default for TableOfContentsPage<T>
 where
-    T: SizeMeasurable,
+    T: SizeMeasurable + Ord + Eq,
 {
     fn default() -> Self {
         Self {
@@ -33,14 +28,17 @@ where
     }
 }
 
-impl<T> TableOfContentsPage<T> {
+impl<T> TableOfContentsPage<T>
+where
+    T: Ord + Eq,
+{
     pub fn estimated_size(&self) -> usize {
         self.estimated_size
     }
 
     pub fn insert(&mut self, val: T, page_id: PageId)
     where
-        T: Ord + Eq + SizeMeasurable,
+        T: SizeMeasurable,
     {
         self.estimated_size += align(val.aligned_size() + page_id.0.aligned_size());
         let _ = self.records.insert(val, page_id);
@@ -62,16 +60,13 @@ impl<T> TableOfContentsPage<T> {
         Some(val)
     }
 
-    pub fn get(&self, val: &T) -> Option<PageId>
-    where
-        T: Ord + Eq,
-    {
+    pub fn get(&self, val: &T) -> Option<PageId> {
         self.records.get(val).copied()
     }
 
     pub fn remove(&mut self, val: &T) -> PageId
     where
-        T: Ord + Eq + SizeMeasurable,
+        T: SizeMeasurable,
     {
         let id = self.remove_without_record(val);
         self.empty_pages.push(id);
@@ -80,7 +75,7 @@ impl<T> TableOfContentsPage<T> {
 
     pub fn remove_without_record(&mut self, val: &T) -> PageId
     where
-        T: Ord + Eq + SizeMeasurable,
+        T: SizeMeasurable,
     {
         self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
         self.estimated_size += PageId::default().0.aligned_size();
@@ -90,10 +85,7 @@ impl<T> TableOfContentsPage<T> {
             .expect("value should be available if remove is called")
     }
 
-    pub fn update_key(&mut self, old_key: &T, new_key: T)
-    where
-        T: Ord + Eq,
-    {
+    pub fn update_key(&mut self, old_key: &T, new_key: T) {
         let id = self
             .records
             .remove(old_key)
@@ -101,10 +93,7 @@ impl<T> TableOfContentsPage<T> {
         self.records.insert(new_key, id);
     }
 
-    pub fn contains(&self, val: &T) -> bool
-    where
-        T: Ord + Eq,
-    {
+    pub fn contains(&self, val: &T) -> bool {
         self.records.contains_key(val)
     }
 
@@ -113,31 +102,14 @@ impl<T> TableOfContentsPage<T> {
     }
 }
 
-impl<T> IntoIterator for TableOfContentsPage<T> {
+impl<T> IntoIterator for TableOfContentsPage<T>
+where
+    T: Ord + Eq,
+{
     type Item = (T, PageId);
     type IntoIter = <BTreeMap<T, PageId> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.records.into_iter()
-    }
-}
-
-impl<T> Persistable for TableOfContentsPage<T>
-where
-    T: Archive
-        + for<'a> Serialize<
-            Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
-        > + Ord
-        + Eq,
-    <T as rkyv::Archive>::Archived:
-        rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>> + Ord + Eq,
-{
-    fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
-        rkyv::deserialize(archived).expect("data should be valid")
     }
 }

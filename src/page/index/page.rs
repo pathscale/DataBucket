@@ -357,8 +357,7 @@ where
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         > + Default
-        + SizeMeasurable
-        + Clone,
+        + SizeMeasurable,
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
