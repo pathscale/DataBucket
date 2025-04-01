@@ -316,10 +316,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
 #[cfg(test)]
 mod tests {
     use crate::page::IndexValue;
-    use crate::{
-        align8, get_index_page_size_from_data_length, IndexPage, Link, Persistable, SizeMeasurable,
-        INNER_PAGE_SIZE,
-    };
+    use crate::{get_index_page_size_from_data_length, IndexPage, Persistable, INNER_PAGE_SIZE};
 
     #[test]
     fn test_bytes() {
