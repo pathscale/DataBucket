@@ -4,7 +4,7 @@ use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 use syn::GenericParam;
 
-fn is_primitive(ty: &str) -> bool {
+pub fn is_primitive(ty: &str) -> bool {
     matches!(
         ty,
         "u8" | "u16"

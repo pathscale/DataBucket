@@ -17,8 +17,10 @@ pub struct PersistableAttributes {
 impl Generator {
     pub fn gen_def(&self) -> syn::Result<TokenStream> {
         let persistable_impl = self.gen_perisistable_impl()?;
+        let field_sizes_fns = self.gen_obj_impl_def();
         Ok(quote! {
             #persistable_impl
+            #field_sizes_fns
         })
     }
 }
