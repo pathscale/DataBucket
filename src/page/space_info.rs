@@ -1,15 +1,10 @@
 //! [`SpaceInfoPage`] declaration.
 
-use rkyv::api::high::HighDeserializer;
-use rkyv::rancor::Strategy;
-use rkyv::ser::allocator::ArenaHandle;
-use rkyv::ser::sharing::Share;
-use rkyv::ser::Serializer;
-use rkyv::util::AlignedVec;
-use rkyv::{Archive, Deserialize, Serialize};
-
 use crate::util::Persistable;
 use crate::{space, Link};
+
+use data_bucket_codegen::Persistable;
+use rkyv::{Archive, Deserialize, Serialize};
 
 pub type SpaceName = String;
 
@@ -17,7 +12,7 @@ pub type SpaceName = String;
 
 /// Internal information about a `Space`. Always appears first before all other
 /// pages in a `Space`.
-#[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize)]
+#[derive(Archive, Clone, Deserialize, Debug, PartialEq, Serialize, Persistable)]
 pub struct SpaceInfoPage<Pk = ()> {
     pub id: space::Id,
     pub page_count: u32,
@@ -36,24 +31,6 @@ pub struct Interval(pub usize, pub usize);
 impl Interval {
     pub fn contains(&self, interval: &Interval) -> bool {
         self.0 <= interval.0 && self.1 >= interval.1
-    }
-}
-
-impl<Pk> Persistable for SpaceInfoPage<Pk>
-where
-    Pk: Archive
-        + for<'a> Serialize<
-            Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
-        >,
-    <Pk as rkyv::Archive>::Archived: rkyv::Deserialize<Pk, HighDeserializer<rkyv::rancor::Error>>,
-{
-    fn as_bytes(&self) -> impl AsRef<[u8]> {
-        rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
-        rkyv::deserialize(archived).expect("data should be valid")
     }
 }
 
