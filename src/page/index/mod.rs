@@ -1,8 +1,7 @@
+use crate::{Link, SizeMeasurable};
 use indexset::core::multipair::MultiPair;
 use indexset::core::pair::Pair;
 use rkyv::{Archive, Deserialize, Serialize};
-
-use crate::{Link, SizeMeasurable};
 
 mod page;
 mod table_of_contents_page;

@@ -5,39 +5,10 @@ use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use super::index::IndexValue;
 use super::SpaceInfoPage;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
-use crate::{DataPage, GeneralPage, IndexPage, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
-
-pub fn map_index_pages_to_general<T>(pages: Vec<IndexPage<T>>) -> Vec<GeneralPage<IndexPage<T>>> {
-    // We are starting ID's from `1` because `0`'s page in file is info page.
-    let header = &mut GeneralHeader::new(1.into(), PageType::Index, 0.into());
-    let mut general_pages = vec![];
-
-    let mut pages = pages.into_iter();
-    if let Some(p) = pages.next() {
-        let general = GeneralPage {
-            header: *header,
-            inner: p,
-        };
-        general_pages.push(general);
-    }
-    let mut previous_header = header;
-
-    for p in pages {
-        let general = GeneralPage {
-            header: previous_header.follow_with(PageType::Index),
-            inner: p,
-        };
-
-        general_pages.push(general);
-        previous_header = &mut general_pages.last_mut().unwrap().header;
-    }
-
-    general_pages
-}
+use crate::{DataPage, GeneralPage, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
 
 pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     pages: Vec<DataPage<DATA_LENGTH>>,
@@ -233,28 +204,6 @@ pub async fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usiz
 //
 //     Ok(parsed_record)
 // }
-
-pub async fn parse_index_page<T, const PAGE_SIZE: usize>(
-    file: &mut File,
-    index: u32,
-) -> eyre::Result<Vec<IndexValue<T>>>
-where
-    T: Archive,
-    <T as rkyv::Archive>::Archived: rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>>,
-{
-    seek_to_page_start(file, index).await?;
-    let header = parse_general_header(file).await?;
-
-    let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
-    file.read_exact(&mut buffer).await?;
-    let archived =
-        unsafe { rkyv::access_unchecked::<<IndexPage<T> as Archive>::Archived>(&buffer[..]) };
-    let index_records: Vec<IndexValue<T>> = rkyv::deserialize::<IndexPage<T>, _>(archived)
-        .expect("data should be valid")
-        .index_values;
-
-    Ok(index_records)
-}
 
 pub async fn parse_space_info<const PAGE_SIZE: usize>(
     file: &mut File,

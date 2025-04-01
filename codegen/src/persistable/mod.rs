@@ -13,7 +13,7 @@ pub fn expand(input: &TokenStream) -> syn::Result<TokenStream> {
         struct_def: input_struct,
     };
 
-    let def = gen.gen_def();
+    let def = gen.gen_def()?;
 
     Ok(quote! {
         #def

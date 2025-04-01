@@ -19,9 +19,8 @@ pub use index::{get_index_page_size_from_data_length, IndexPage, IndexValue, Tab
 pub use space_info::{Interval, SpaceInfoPage};
 pub use ty::PageType;
 pub use util::{
-    map_data_pages_to_general, map_index_pages_to_general, parse_data_page,
-    parse_general_header_by_index, parse_index_page, parse_page, parse_space_info, persist_page,
-    seek_by_link, seek_to_page_start, update_at,
+    map_data_pages_to_general, parse_data_page, parse_general_header_by_index, parse_page,
+    parse_space_info, persist_page, seek_by_link, seek_to_page_start, update_at,
 };
 
 // TODO: Move to config
