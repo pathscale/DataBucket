@@ -134,7 +134,7 @@ impl Generator {
             .fields
             .iter()
             .enumerate()
-            .find(|(_, f)| f.ident.clone().unwrap().to_string() == "size");
+            .find(|(_, f)| f.ident.clone().unwrap() == "size");
         if let Some((pos, size_field)) = size_field {
             if pos != 0 {
                 return Err(syn::Error::new(

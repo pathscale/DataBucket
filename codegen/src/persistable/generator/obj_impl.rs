@@ -67,7 +67,7 @@ impl Generator {
                 .iter()
                 .map(|f| {
                     let fn_ident = Ident::new(
-                        format!("{}_size", f.ident.clone().unwrap().to_string()).as_str(),
+                        format!("{}_size", f.ident.clone().unwrap()).as_str(),
                         Span::call_site(),
                     );
 
@@ -94,7 +94,7 @@ impl Generator {
                 .iter()
                 .map(|f| {
                     let fn_ident = Ident::new(
-                        format!("{}_size", f.ident.clone().unwrap().to_string()).as_str(),
+                        format!("{}_size", f.ident.clone().unwrap()).as_str(),
                         Span::call_site(),
                     );
 
@@ -120,11 +120,11 @@ impl Generator {
                 inner_ty_str.pop();
                 let inner_ty: TokenStream = inner_ty_str.parse().unwrap();
                 let value_fn_ident = Ident::new(
-                    format!("{}_value_size", f.ident.clone().unwrap().to_string()).as_str(),
+                    format!("{}_value_size", f.ident.clone().unwrap()).as_str(),
                     Span::call_site(),
                 );
                 let fn_ident = Ident::new(
-                    format!("{}_size", f.ident.clone().unwrap().to_string()).as_str(),
+                    format!("{}_size", f.ident.clone().unwrap()).as_str(),
                     Span::call_site(),
                 );
                 let len_in_vec = if is_primitive(&inner_ty_str) {
@@ -156,7 +156,7 @@ impl Generator {
             } else {
                 let ident = &f.ty;
                 let fn_ident = Ident::new(
-                    format!("{}_size", f.ident.clone().unwrap().to_string()).as_str(),
+                    format!("{}_size", f.ident.clone().unwrap()).as_str(),
                     Span::call_site(),
                 );
                 quote! {

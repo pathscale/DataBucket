@@ -116,14 +116,6 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         new_page
     }
 
-    fn index_page_utility_length(size: usize) -> usize {
-        T::default().aligned_size()
-            + u16::default().aligned_size()
-            + u16::default().aligned_size()
-            + align(size * u16::default().aligned_size())
-            + 8
-    }
-
     pub async fn parse_index_page_utility(
         file: &mut File,
         page_id: PageId,
