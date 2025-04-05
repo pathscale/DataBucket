@@ -12,6 +12,7 @@ pub struct Generator {
 
 pub struct PersistableAttributes {
     pub is_full_row: bool,
+    pub unsized_gens: bool,
 }
 
 impl Generator {

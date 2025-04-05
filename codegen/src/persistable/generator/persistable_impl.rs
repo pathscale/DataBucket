@@ -1,8 +1,9 @@
 use crate::persistable::generator::Generator;
-use proc_macro2::TokenStream;
+
+use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
-use syn::GenericParam;
+use syn::{Field, GenericParam, Type};
 
 pub fn is_primitive(ty: &str) -> bool {
     matches!(
@@ -121,7 +122,7 @@ impl Generator {
             .collect();
         quote! {
             fn as_bytes(&self) -> impl AsRef<[u8]> {
-                let mut bytes = Vec::with_capacity(self.size as usize);
+                let mut bytes = vec![];
                 #(#field_serialize)*
                 bytes
             }
@@ -129,90 +130,172 @@ impl Generator {
     }
 
     fn gen_perisistable_by_parts_from_bytes_fn(&self) -> syn::Result<TokenStream> {
-        let size_field = self
+        let size_fields: Vec<_> = self
             .struct_def
             .fields
             .iter()
             .enumerate()
-            .find(|(_, f)| f.ident.clone().unwrap() == "size");
-        if let Some((pos, size_field)) = size_field {
-            if pos != 0 {
+            .filter(|(_, f)| f.ident.clone().unwrap().to_string().contains("size"))
+            .collect();
+
+        if size_fields.len() == 1 {
+            let (pos, size_field) = size_fields.first().unwrap();
+            if size_field.ident.as_ref().unwrap() != "size" {
+                return Err(syn::Error::new(
+                    size_field.span(),
+                    "If single size is defined, it should have name `size`",
+                ));
+            }
+            if *pos != 0 {
                 return Err(syn::Error::new(
                     size_field.span(),
                     "`size` field should be first field in a struct",
                 ));
             }
-            let size_type = &size_field.ty;
-            let field_deserialize: Vec<_> = self
-                .struct_def
-                .fields
-                .iter()
-                .filter(|f| !f.ident.clone().unwrap().to_string().contains("size"))
-                .map(|f| {
-                    let ident = &f.ident.clone().expect("is not tuple struct");
-                    if f.ty.to_token_stream().to_string().contains("Vec") {
-                        let ty = &f.ty;
-                        let inner_ty_str = ty.to_token_stream().to_string().replace(" ", "");
-                        let mut inner_ty_str = inner_ty_str.replace("Vec<", "");
-                        inner_ty_str.pop();
-                        let inner_ty: TokenStream = inner_ty_str.parse().unwrap();
-                        let len = if is_primitive(&inner_ty_str) {
-                            quote! {
-                                let values_len = align(size as usize * <#inner_ty as Default>::default().aligned_size()) + 8;
-                            }
-                        } else {
-                            quote! {
-                                let values_len = size as usize * align8(<#inner_ty as Default>::default().aligned_size()) + 8;
-                            }
-                        };
-                        quote! {
-                            #len
-                            let mut v = rkyv::util::AlignedVec::<4>::new();
-                            v.extend_from_slice(&bytes[offset..offset + values_len]);
-                            let archived =
-                                unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
-                            let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
-                                .expect("data should be valid");
-                            offset += values_len;
-                        }
-                    } else {
-                        let ty = &f.ty;
-                        quote! {
-                            let length = #ty::default().aligned_size();
-                            let mut v = rkyv::util::AlignedVec::<4>::new();
-                            v.extend_from_slice(&bytes[offset..offset + length]);
-                            let archived = unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
-                            let #ident = rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
-                            offset += length;
-                        }
-                    }
-                })
-                .collect();
-            let fields: Vec<_> = self
-                .struct_def
-                .fields
-                .iter()
-                .map(|f| f.ident.clone().unwrap())
-                .collect();
+        } else {
+            let mut correct_order = true;
+            for i in 0..size_fields.len() {
+                correct_order = size_fields.iter().any(|(pos, _)| *pos == i)
+            }
+            if !correct_order {
+                return Err(syn::Error::new(
+                    self.struct_def.span(),
+                    "`size_..` fields should be first fields in a struct",
+                ));
+            }
+        }
 
-            Ok(quote! {
-                fn from_bytes(bytes: &[u8]) -> Self {
-                    let size_length = #size_type::default().aligned_size();
-                    let archived =
-                        unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[0..size_length]) };
-                    let size =
-                        rkyv::deserialize::<#size_type, rkyv::rancor::Error>(archived).expect("data should be valid");
-                    let mut offset = size_length;
-
-                    #(#field_deserialize)*
-
-                    Self {
-                        #(#fields),*
-                    }
+        let field_deserialize: Vec<_> = self
+            .struct_def
+            .fields
+            .iter()
+            .filter(|f| !f.ident.clone().unwrap().to_string().contains("size"))
+            .map(|f| {
+                let ident = &f.ident.clone().expect("is not tuple struct");
+                if f.ty.to_token_stream().to_string().contains("Vec") {
+                    self.gen_from_bytes_for_vec(&f.ty, ident, &size_fields)
+                } else if f.ty.to_token_stream().to_string().contains("String") {
+                    self.gen_from_bytes_for_string(&f.ty, ident, &size_fields)
+                } else {
+                    self.gen_from_bytes_for_primitive(&f.ty, ident)
                 }
             })
+            .collect();
+        let fields: Vec<_> = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| f.ident.clone().unwrap())
+            .collect();
+
+        let size_defs: Vec<_> = size_fields.into_iter().map(|(_,f)| {
+            let size_type = &f.ty;
+            let size_ident = f.ident.as_ref().unwrap();
+            quote! {
+                let size_length = #size_type::default().aligned_size();
+                let archived =
+                    unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[0..size_length]) };
+                let #size_ident =
+                    rkyv::deserialize::<#size_type, rkyv::rancor::Error>(archived).expect("data should be valid");
+                offset += size_length;
+            }
+        }).collect();
+
+        Ok(quote! {
+            fn from_bytes(bytes: &[u8]) -> Self {
+                let mut offset = 0usize;
+                #(#size_defs)*
+
+                #(#field_deserialize)*
+
+                Self {
+                    #(#fields),*
+                }
+            }
+        })
+    }
+
+    fn gen_from_bytes_for_primitive(&self, ty: &Type, ident: &Ident) -> TokenStream {
+        quote! {
+            let length = #ty::default().aligned_size();
+            let mut v = rkyv::util::AlignedVec::<4>::new();
+            v.extend_from_slice(&bytes[offset..offset + length]);
+            let archived = unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            let #ident = rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+            offset += length;
+        }
+    }
+
+    fn gen_from_bytes_for_vec(
+        &self,
+        ty: &Type,
+        ident: &Ident,
+        size_fields: &Vec<(usize, &Field)>,
+    ) -> TokenStream {
+        let inner_ty_str = ty.to_token_stream().to_string().replace(" ", "");
+        let mut inner_ty_str = inner_ty_str.replace("Vec<", "");
+        inner_ty_str.pop();
+        let inner_ty: TokenStream = inner_ty_str.parse().unwrap();
+        let size_ident = if size_fields.len() == 1 {
+            size_fields.first().unwrap().1.ident.as_ref().unwrap()
         } else {
-            todo!("Add named size's search");
+            let val = size_fields.iter().find(|(_, f)| {
+                f.ident
+                    .as_ref()
+                    .unwrap()
+                    .to_string()
+                    .contains(ident.to_string().as_str())
+            });
+            val.unwrap().1.ident.as_ref().unwrap()
+        };
+        let len = if is_primitive(&inner_ty_str) {
+            quote! {
+                let values_len = align(#size_ident as usize * <#inner_ty as Default>::default().aligned_size()) + 8;
+            }
+        } else {
+            quote! {
+                let values_len = #size_ident as usize * align8(<#inner_ty as Default>::default().aligned_size()) + 8;
+            }
+        };
+        quote! {
+            #len
+            let mut v = rkyv::util::AlignedVec::<4>::new();
+            v.extend_from_slice(&bytes[offset..offset + values_len]);
+            let archived =
+            unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
+                .expect("data should be valid");
+            offset += values_len;
+        }
+    }
+
+    fn gen_from_bytes_for_string(
+        &self,
+        ty: &Type,
+        ident: &Ident,
+        size_fields: &Vec<(usize, &Field)>,
+    ) -> TokenStream {
+        let size_ident = if size_fields.len() == 1 {
+            size_fields.first().unwrap().1.ident.as_ref().unwrap()
+        } else {
+            let val = size_fields.iter().find(|(_, f)| {
+                f.ident
+                    .as_ref()
+                    .unwrap()
+                    .to_string()
+                    .contains(ident.to_string().as_str())
+            });
+            val.unwrap().1.ident.as_ref().unwrap()
+        };
+        quote! {
+            let values_len = align(#size_ident + 8)
+            let mut v = rkyv::util::AlignedVec::<4>::new();
+            v.extend_from_slice(&bytes[offset..offset + values_len]);
+            let archived =
+            unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
+                .expect("data should be valid");
+            offset += values_len;
         }
     }
 }

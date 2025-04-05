@@ -15,13 +15,20 @@ impl Parser {
     }
 
     pub fn parse_attributes(attrs: &Vec<Attribute>) -> PersistableAttributes {
-        let mut res = PersistableAttributes { is_full_row: true };
+        let mut res = PersistableAttributes {
+            is_full_row: true,
+            unsized_gens: false,
+        };
 
         for attr in attrs {
             if attr.path().to_token_stream().to_string().as_str() == "persistable" {
                 attr.parse_nested_meta(|meta| {
                     if meta.path.is_ident("by_parts") {
                         res.is_full_row = false;
+                        return Ok(());
+                    }
+                    if meta.path.is_ident("unsized_gens") {
+                        res.unsized_gens = true;
                         return Ok(());
                     }
                     Ok(())

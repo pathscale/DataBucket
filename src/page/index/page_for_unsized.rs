@@ -18,7 +18,8 @@ use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE}
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct UnsizedIndexPage<T: Default + SizeMeasurable, const DATA_LENGTH: u32> {
-    pub size: u16,
+    pub slots_size: u16,
+    pub node_id_size: u16,
     pub node_id: T,
     pub last_value_offset: u32,
     pub slots: Vec<(u32, u16)>,
@@ -30,7 +31,8 @@ pub struct UnsizedIndexPage<T: Default + SizeMeasurable, const DATA_LENGTH: u32>
 )]
 #[persistable(by_parts)]
 pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable> {
-    pub size: u16,
+    pub slots_size: u16,
+    pub node_id_size: u16,
     pub node_id: T,
     pub last_value_offset: u32,
     pub slots: Vec<(u32, u16)>,
@@ -55,19 +57,32 @@ where
         let offset = GENERAL_HEADER_SIZE as i64;
         file.seek(SeekFrom::Current(offset)).await?;
 
-        let mut size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::size_size()];
-        file.read_exact(size_bytes.as_mut_slice()).await?;
+        let mut slot_size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::slots_size_size()];
+        file.read_exact(slot_size_bytes.as_mut_slice()).await?;
         let archived = unsafe {
             rkyv::access_unchecked::<<u16 as Archive>::Archived>(
-                &size_bytes[0..UnsizedIndexPageUtility::<T>::size_size()],
+                &slot_size_bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()],
             )
         };
-        let size =
+        let slots_size =
+            rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
+        let mut node_id_size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::node_id_size_size()];
+        file.read_exact(node_id_size_bytes.as_mut_slice()).await?;
+        let archived = unsafe {
+            rkyv::access_unchecked::<<u16 as Archive>::Archived>(
+                &node_id_size_bytes[0..UnsizedIndexPageUtility::<T>::node_id_size_size()],
+            )
+        };
+        let node_id_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
-        let index_utility_len = UnsizedIndexPageUtility::<T>::persisted_size(size as usize);
+        let index_utility_len = UnsizedIndexPageUtility::<T>::persisted_size(
+            slots_size as usize,
+            node_id_size as usize,
+        );
         file.seek(SeekFrom::Current(
-            -(UnsizedIndexPageUtility::<T>::size_size() as i64),
+            -(UnsizedIndexPageUtility::<T>::slots_size_size() as i64
+                + UnsizedIndexPageUtility::<T>::node_id_size_size() as i64),
         ))
         .await?;
         let mut index_utility_bytes = vec![0u8; index_utility_len];
@@ -92,7 +107,8 @@ where
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
         let len = bytes.len() as u32;
         Ok(Self {
-            size: 1,
+            slots_size: 1,
+            node_id_size: node_id.aligned_size() as u16,
             node_id,
             last_value_offset: len,
             slots: vec![(len, len as u16)],
@@ -140,7 +156,8 @@ where
     fn as_bytes(&self) -> impl AsRef<[u8]> + Send {
         let data_length = DATA_LENGTH as usize;
         let utility = UnsizedIndexPageUtility {
-            size: self.size,
+            slots_size: self.slots_size,
+            node_id_size: self.node_id_size,
             node_id: self.node_id.clone(),
             last_value_offset: self.last_value_offset,
             slots: self.slots.clone(),
@@ -162,15 +179,22 @@ where
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let size_bytes = &bytes[0..UnsizedIndexPageUtility::<T>::size_size()];
-        let archived = unsafe {
-            rkyv::access_unchecked::<<u16 as Archive>::Archived>(
-                &size_bytes[0..UnsizedIndexPageUtility::<T>::size_size()],
-            )
-        };
-        let size =
+        let slots_size_bytes = &bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()];
+        let archived =
+            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&slots_size_bytes) };
+        let slots_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
-        let utility_len = UnsizedIndexPageUtility::<T>::persisted_size(size as usize);
+        let node_id_size_bytes = &bytes[UnsizedIndexPageUtility::<T>::slots_size_size()
+            ..UnsizedIndexPageUtility::<T>::node_id_size_size()
+                + UnsizedIndexPageUtility::<T>::node_id_size_size()];
+        let archived =
+            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&node_id_size_bytes) };
+        let node_id_size =
+            rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
+        let utility_len = UnsizedIndexPageUtility::<T>::persisted_size(
+            slots_size as usize,
+            node_id_size as usize,
+        );
         let utility = UnsizedIndexPageUtility::<T>::from_bytes(&bytes[0..utility_len]);
         let mut index_values = Vec::with_capacity(utility.slots.len());
         for (offset, len) in &utility.slots {
@@ -186,7 +210,8 @@ where
         }
 
         Self {
-            size,
+            slots_size,
+            node_id_size,
             node_id: utility.node_id,
             last_value_offset: utility.last_value_offset,
             slots: utility.slots,
@@ -202,14 +227,15 @@ mod test {
     #[test]
     fn to_bytes_and_back() {
         let value = IndexValue {
-            key: "SomeID".to_string(),
+            key: "Something for Someone".to_string(),
             link: Link {
                 page_id: 0.into(),
                 offset: 0,
                 length: 40,
             },
         };
-        let page = UnsizedIndexPage::<_, 1024>::new("SomeID".to_string(), value).unwrap();
+        let page =
+            UnsizedIndexPage::<_, 1024>::new("Something for Someone".to_string(), value).unwrap();
         let bytes = page.as_bytes();
         assert_eq!(bytes.as_ref().len(), 1024);
         let page_back = UnsizedIndexPage::from_bytes(bytes.as_ref());

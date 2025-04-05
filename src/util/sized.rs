@@ -135,6 +135,23 @@ where
     }
 }
 
+/// Marks an objects that can return theirs approximate size after archiving via
+/// [`rkyv`].
+pub trait VariableSizeMeasurable {
+    /// Returns approximate size of the object archiving via [`rkyv`].
+    fn aligned_size(length: usize) -> usize;
+}
+
+impl VariableSizeMeasurable for String {
+    fn aligned_size(length: usize) -> usize {
+        if length <= 8 {
+            8
+        } else {
+            align(length + 8)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::util::sized::SizeMeasurable;
