@@ -7,12 +7,13 @@ use syn::ItemStruct;
 
 pub struct Generator {
     pub is_full_row: bool,
+    pub is_generic_unsized: bool,
     pub struct_def: ItemStruct,
 }
 
 pub struct PersistableAttributes {
     pub is_full_row: bool,
-    pub unsized_gens: bool,
+    pub is_generic_unsized: bool,
 }
 
 impl Generator {

@@ -10,14 +10,17 @@ use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use crate::align8;
 use crate::page::index::IndexPageUtility;
 use crate::page::PageId;
 use crate::Persistable;
+use crate::{align8, VariableSizeMeasurable};
 use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE};
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct UnsizedIndexPage<T: Default + SizeMeasurable, const DATA_LENGTH: u32> {
+pub struct UnsizedIndexPage<
+    T: Default + SizeMeasurable + VariableSizeMeasurable,
+    const DATA_LENGTH: u32,
+> {
     pub slots_size: u16,
     pub node_id_size: u16,
     pub node_id: T,
@@ -29,8 +32,8 @@ pub struct UnsizedIndexPage<T: Default + SizeMeasurable, const DATA_LENGTH: u32>
 #[derive(
     Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Persistable,
 )]
-#[persistable(by_parts)]
-pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable> {
+#[persistable(by_parts, unsized_gens)]
+pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable + VariableSizeMeasurable> {
     pub slots_size: u16,
     pub node_id_size: u16,
     pub node_id: T,
@@ -38,8 +41,8 @@ pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable> {
     pub slots: Vec<(u32, u16)>,
 }
 
-impl<T: Default + SizeMeasurable, const DATA_LENGTH: u32> IndexPageUtility<T>
-    for UnsizedIndexPage<T, DATA_LENGTH>
+impl<T: Default + SizeMeasurable + VariableSizeMeasurable, const DATA_LENGTH: u32>
+    IndexPageUtility<T> for UnsizedIndexPage<T, DATA_LENGTH>
 where
     T: Archive
         + for<'a> Serialize<
@@ -98,6 +101,7 @@ where
     T: Archive
         + Default
         + SizeMeasurable
+        + VariableSizeMeasurable
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
@@ -148,6 +152,7 @@ where
         + Clone
         + Default
         + SizeMeasurable
+        + VariableSizeMeasurable
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
@@ -227,7 +232,7 @@ mod test {
     #[test]
     fn to_bytes_and_back() {
         let value = IndexValue {
-            key: "Something for Someone".to_string(),
+            key: "Someone from somewhere".to_string(),
             link: Link {
                 page_id: 0.into(),
                 offset: 0,
@@ -235,7 +240,7 @@ mod test {
             },
         };
         let page =
-            UnsizedIndexPage::<_, 1024>::new("Something for Someone".to_string(), value).unwrap();
+            UnsizedIndexPage::<_, 1024>::new("Someone from somewhere".to_string(), value).unwrap();
         let bytes = page.as_bytes();
         assert_eq!(bytes.as_ref().len(), 1024);
         let page_back = UnsizedIndexPage::from_bytes(bytes.as_ref());

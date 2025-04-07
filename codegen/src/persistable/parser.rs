@@ -17,7 +17,7 @@ impl Parser {
     pub fn parse_attributes(attrs: &Vec<Attribute>) -> PersistableAttributes {
         let mut res = PersistableAttributes {
             is_full_row: true,
-            unsized_gens: false,
+            is_generic_unsized: false,
         };
 
         for attr in attrs {
@@ -28,7 +28,7 @@ impl Parser {
                         return Ok(());
                     }
                     if meta.path.is_ident("unsized_gens") {
-                        res.unsized_gens = true;
+                        res.is_generic_unsized = true;
                         return Ok(());
                     }
                     Ok(())

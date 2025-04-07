@@ -68,6 +68,19 @@ impl Generator {
                 }
             })
             .collect();
+        let gens: Vec<_> = self
+            .struct_def
+            .generics
+            .params
+            .iter()
+            .filter_map(|p| {
+                if let GenericParam::Type(t) = p {
+                    Some(t.ident.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         let sizes: Vec<_> = self
             .struct_def
@@ -88,11 +101,14 @@ impl Generator {
                     }
                 };
 
-                if f.ty.to_token_stream().to_string().contains("Vec")
-                    || f.ty.to_token_stream().to_string().contains("String")
-                {
+                let field_type_str = f.ty.to_token_stream().to_string();
+                if field_type_str.contains("Vec") || field_type_str.contains("String") {
                     quote! {
                         Self::#fn_ident(#size_ident)
+                    }
+                } else if gens.contains(&field_type_str) && self.is_generic_unsized {
+                    quote! {
+                        #size_ident
                     }
                 } else {
                     quote! {
@@ -109,11 +125,27 @@ impl Generator {
     }
 
     fn gen_field_sizes_fns(&self) -> TokenStream {
+        let gens: Vec<_> = self
+            .struct_def
+            .generics
+            .params
+            .iter()
+            .filter_map(|p| {
+                if let GenericParam::Type(t) = p {
+                    Some(t.ident.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
         let field_sizes = self.struct_def.fields.iter().map(|f| {
-            if f.ty.to_token_stream().to_string().contains("Vec") {
+            let field_type_str = f.ty.to_token_stream().to_string();
+            if field_type_str.contains("Vec") {
                 self.gen_vec_size_fns(&f)
-            } else if f.ty.to_token_stream().to_string().contains("String") {
+            } else if field_type_str.contains("String") {
                 self.gen_string_size_fn(&f)
+            } else if gens.contains(&field_type_str) && self.is_generic_unsized {
+                self.gen_generic_size_fn(&f)
             } else {
                 self.gen_primitive_size_fn(&f)
             }
@@ -145,6 +177,19 @@ impl Generator {
         quote! {
             pub fn #fn_ident(length: usize) -> usize {
                 align(length + 8)
+            }
+        }
+    }
+
+    fn gen_generic_size_fn(&self, f: &Field) -> TokenStream {
+        let fn_ident = Ident::new(
+            format!("{}_size", f.ident.clone().unwrap()).as_str(),
+            Span::call_site(),
+        );
+        let ty_ = &f.ty;
+        quote! {
+            pub fn #fn_ident(length: usize) -> usize {
+                <#ty_ as VariableSizeMeasurable>::aligned_size(length)
             }
         }
     }

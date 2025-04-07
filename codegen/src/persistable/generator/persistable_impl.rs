@@ -137,6 +137,19 @@ impl Generator {
             .enumerate()
             .filter(|(_, f)| f.ident.clone().unwrap().to_string().contains("size"))
             .collect();
+        let gens: Vec<_> = self
+            .struct_def
+            .generics
+            .params
+            .iter()
+            .filter_map(|p| {
+                if let GenericParam::Type(t) = p {
+                    Some(t.ident.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         if size_fields.len() == 1 {
             let (pos, size_field) = size_fields.first().unwrap();
@@ -172,10 +185,13 @@ impl Generator {
             .filter(|f| !f.ident.clone().unwrap().to_string().contains("size"))
             .map(|f| {
                 let ident = &f.ident.clone().expect("is not tuple struct");
-                if f.ty.to_token_stream().to_string().contains("Vec") {
+                let field_type_str = f.ty.to_token_stream().to_string();
+                if field_type_str.contains("Vec") {
                     self.gen_from_bytes_for_vec(&f.ty, ident, &size_fields)
-                } else if f.ty.to_token_stream().to_string().contains("String") {
+                } else if field_type_str.contains("String") {
                     self.gen_from_bytes_for_string(&f.ty, ident, &size_fields)
+                } else if gens.contains(&field_type_str) && self.is_generic_unsized {
+                    self.gen_from_bytes_for_unsized_generic(&f.ty, ident, &size_fields)
                 } else {
                     self.gen_from_bytes_for_primitive(&f.ty, ident)
                 }
@@ -194,7 +210,7 @@ impl Generator {
             quote! {
                 let size_length = #size_type::default().aligned_size();
                 let archived =
-                    unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[0..size_length]) };
+                    unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[offset..offset + size_length]) };
                 let #size_ident =
                     rkyv::deserialize::<#size_type, rkyv::rancor::Error>(archived).expect("data should be valid");
                 offset += size_length;
@@ -289,6 +305,36 @@ impl Generator {
         };
         quote! {
             let values_len = align(#size_ident + 8)
+            let mut v = rkyv::util::AlignedVec::<4>::new();
+            v.extend_from_slice(&bytes[offset..offset + values_len]);
+            let archived =
+            unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
+                .expect("data should be valid");
+            offset += values_len;
+        }
+    }
+
+    fn gen_from_bytes_for_unsized_generic(
+        &self,
+        ty: &Type,
+        ident: &Ident,
+        size_fields: &Vec<(usize, &Field)>,
+    ) -> TokenStream {
+        let size_ident = if size_fields.len() == 1 {
+            size_fields.first().unwrap().1.ident.as_ref().unwrap()
+        } else {
+            let val = size_fields.iter().find(|(_, f)| {
+                f.ident
+                    .as_ref()
+                    .unwrap()
+                    .to_string()
+                    .contains(ident.to_string().as_str())
+            });
+            val.unwrap().1.ident.as_ref().unwrap()
+        };
+        quote! {
+            let values_len = #size_ident as usize;
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + values_len]);
             let archived =

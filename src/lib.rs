@@ -18,4 +18,4 @@ pub use page::{
 };
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use space::Id as SpaceId;
-pub use util::{align, align8, align_vec, Persistable, SizeMeasurable};
+pub use util::{align, align8, align_vec, Persistable, SizeMeasurable, VariableSizeMeasurable};
