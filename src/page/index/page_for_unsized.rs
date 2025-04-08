@@ -7,14 +7,15 @@ use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::io::SeekFrom;
+use std::mem;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::page::index::IndexPageUtility;
 use crate::page::PageId;
-use crate::Persistable;
 use crate::{align8, VariableSizeMeasurable};
 use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE};
+use crate::{IndexPage, Persistable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct UnsizedIndexPage<
@@ -39,6 +40,15 @@ pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable + VariableSizeMea
     pub node_id: T,
     pub last_value_offset: u32,
     pub slots: Vec<(u32, u16)>,
+}
+
+impl<T: Default + SizeMeasurable + VariableSizeMeasurable> UnsizedIndexPageUtility<T> {
+    pub fn update_node_id(&mut self, node_id: T) -> eyre::Result<()> {
+        self.node_id_size = node_id.aligned_size() as u16;
+        self.node_id = node_id;
+
+        Ok(())
+    }
 }
 
 impl<T: Default + SizeMeasurable + VariableSizeMeasurable, const DATA_LENGTH: u32>
@@ -108,8 +118,7 @@ where
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
     pub fn new(node_id: T, value: IndexValue<T>) -> eyre::Result<Self> {
-        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        let len = bytes.len() as u32;
+        let len = value.aligned_size() as u32;
         Ok(Self {
             slots_size: 1,
             node_id_size: node_id.aligned_size() as u16,
@@ -118,6 +127,54 @@ where
             slots: vec![(len, len as u16)],
             index_values: vec![value],
         })
+    }
+
+    fn new_with_values(values: Vec<IndexValue<T>>) -> Self
+    where
+        T: Clone,
+    {
+        let slots_size = values.len() as u16;
+        let node_id = values.last().expect("Node should be not empty").key.clone();
+        let node_id_size = node_id.aligned_size() as u16;
+        let mut last_value_offset = 0;
+        let mut slots = vec![];
+        for val in &values {
+            let len = val.aligned_size() as u32;
+            slots.push((last_value_offset, len as u16));
+            last_value_offset += len;
+        }
+        Self {
+            slots_size,
+            node_id_size,
+            node_id,
+            last_value_offset,
+            slots,
+            index_values: values,
+        }
+    }
+
+    fn rebuild(&mut self) {
+        self.node_id_size = self.node_id.aligned_size() as u16;
+        self.last_value_offset = 0;
+        let mut slots = vec![];
+        for val in &self.index_values {
+            let len = val.aligned_size() as u32;
+            slots.push((self.last_value_offset, len as u16));
+            self.last_value_offset += len;
+        }
+        self.slots = slots;
+        self.slots_size = self.slots.len() as u16
+    }
+
+    pub fn split(&mut self, index: usize) -> UnsizedIndexPage<T, DATA_LENGTH>
+    where
+        T: Clone,
+    {
+        let index_values = self.index_values.split_off(index);
+        let mut new_page = UnsizedIndexPage::new_with_values(index_values);
+        self.rebuild();
+
+        new_page
     }
 
     pub async fn persist_value(
@@ -139,10 +196,39 @@ where
 
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
         let offset = current_offset + bytes.len() as u32;
-        file.seek(SeekFrom::Current(offset as i64)).await?;
+        file.seek(SeekFrom::Current(-(offset as i64))).await?;
         file.write_all(bytes.as_slice()).await?;
 
         Ok(offset)
+    }
+
+    async fn read_value(file: &mut File, len: u16) -> eyre::Result<IndexValue<T>>
+    where
+        T: Archive,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    {
+        let mut bytes = vec![0u8; len as usize];
+        file.read_exact(bytes.as_mut_slice()).await?;
+        let mut v = AlignedVec::<4>::new();
+        v.extend_from_slice(bytes.as_slice());
+        let archived =
+            unsafe { rkyv::access_unchecked::<<IndexValue<T> as Archive>::Archived>(&v[..]) };
+        Ok(rkyv::deserialize(archived).expect("data should be valid"))
+    }
+
+    pub async fn read_value_with_offset(
+        file: &mut File,
+        page_id: PageId,
+        offset: u32,
+        len: u16,
+    ) -> eyre::Result<IndexValue<T>>
+    where
+        T: Archive,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    {
+        seek_to_page_start(file, page_id.0 + 1).await?;
+        file.seek(SeekFrom::Current(-(offset as i64))).await?;
+        Self::read_value(file, len).await
     }
 }
 
@@ -227,7 +313,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexValue, Link, Persistable, UnsizedIndexPage};
+    use crate::{IndexPage, IndexValue, Link, Persistable, UnsizedIndexPage};
 
     #[test]
     fn to_bytes_and_back() {
@@ -245,5 +331,38 @@ mod test {
         assert_eq!(bytes.as_ref().len(), 1024);
         let page_back = UnsizedIndexPage::from_bytes(bytes.as_ref());
         assert_eq!(page_back, page)
+    }
+
+    #[test]
+    fn split() {
+        let mut values = vec![];
+        for i in 0..10 {
+            values.push(IndexValue {
+                key: format!("{}___________________{}", i, i),
+                link: Link {
+                    page_id: 0.into(),
+                    offset: i * 24,
+                    length: 24,
+                },
+            })
+        }
+        let mut page = UnsizedIndexPage::<String, 1024>::new_with_values(values);
+        let split = page.split(5);
+
+        assert_eq!(page.slots_size, 5);
+        let offset = page.slots.iter().map(|(_, l)| *l).sum::<u16>();
+        assert_eq!(page.last_value_offset, offset as u32);
+        assert_eq!(
+            page.last_value_offset,
+            page.slots.last().unwrap().0 + page.slots.last().unwrap().1 as u32
+        );
+
+        assert_eq!(split.slots_size, 5);
+        let offset = split.slots.iter().map(|(_, l)| *l).sum::<u16>();
+        assert_eq!(split.last_value_offset, offset as u32);
+        assert_eq!(
+            split.last_value_offset,
+            page.slots.last().unwrap().0 + page.slots.last().unwrap().1 as u32
+        );
     }
 }
