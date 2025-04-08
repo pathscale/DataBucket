@@ -140,8 +140,8 @@ where
         let mut slots = vec![];
         for val in &values {
             let len = val.aligned_size() as u32;
-            slots.push((last_value_offset, len as u16));
             last_value_offset += len;
+            slots.push((last_value_offset, len as u16));
         }
         Self {
             slots_size,
@@ -159,8 +159,8 @@ where
         let mut slots = vec![];
         for val in &self.index_values {
             let len = val.aligned_size() as u32;
-            slots.push((self.last_value_offset, len as u16));
             self.last_value_offset += len;
+            slots.push((self.last_value_offset, len as u16));
         }
         self.slots = slots;
         self.slots_size = self.slots.len() as u16
@@ -313,7 +313,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexPage, IndexValue, Link, Persistable, UnsizedIndexPage};
+    use crate::{IndexValue, Link, Persistable, UnsizedIndexPage};
 
     #[test]
     fn to_bytes_and_back() {
@@ -352,17 +352,11 @@ mod test {
         assert_eq!(page.slots_size, 5);
         let offset = page.slots.iter().map(|(_, l)| *l).sum::<u16>();
         assert_eq!(page.last_value_offset, offset as u32);
-        assert_eq!(
-            page.last_value_offset,
-            page.slots.last().unwrap().0 + page.slots.last().unwrap().1 as u32
-        );
+        assert_eq!(page.last_value_offset, page.slots.last().unwrap().0);
 
         assert_eq!(split.slots_size, 5);
         let offset = split.slots.iter().map(|(_, l)| *l).sum::<u16>();
         assert_eq!(split.last_value_offset, offset as u32);
-        assert_eq!(
-            split.last_value_offset,
-            page.slots.last().unwrap().0 + page.slots.last().unwrap().1 as u32
-        );
+        assert_eq!(split.last_value_offset, page.slots.last().unwrap().0)
     }
 }
