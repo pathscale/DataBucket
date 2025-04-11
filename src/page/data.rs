@@ -2,7 +2,7 @@ use crate::Link;
 use crate::Persistable;
 use eyre::{eyre, Result};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataPage<const DATA_LENGTH: usize> {
     pub length: u32,
     pub data: [u8; DATA_LENGTH],

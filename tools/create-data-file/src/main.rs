@@ -1,12 +1,11 @@
 use clap::Parser;
 use data_bucket::{persist_page, GeneralHeader, GeneralPage, PageType, DATA_VERSION};
-use data_bucket::{IndexData, IndexValue, Interval, Link, SpaceInfoData};
+use data_bucket::{IndexPage, IndexValue, Link, SpaceInfoPage};
+use tokio::fs::File;
+
 use rkyv::rancor::Error;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::{
-    fs::{remove_file, File},
-    str,
-};
+use std::{fs::remove_file, str};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -16,10 +15,11 @@ struct Args {
     count: usize,
 }
 
-fn main() -> eyre::Result<()> {
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
     let args = Args::parse();
     _ = remove_file(args.filename.as_str());
-    let mut output_file = File::create(args.filename.as_str())?;
+    let mut output_file = File::create(args.filename.as_str()).await?;
 
     let space_info_header = GeneralHeader {
         data_version: DATA_VERSION,
@@ -31,7 +31,7 @@ fn main() -> eyre::Result<()> {
         data_length: 0u32,
     };
 
-    let space_info = SpaceInfoData {
+    let space_info = SpaceInfoPage {
         id: 1.into(),
         page_count: 4,
         name: "generated space".to_owned(),
@@ -40,19 +40,18 @@ fn main() -> eyre::Result<()> {
             ("attr".to_string(), "String".to_string()),
         ],
         primary_key_fields: vec!["val".to_string()],
-        primary_key_intervals: vec![Interval(1, 1)],
-        secondary_index_types: vec![],
-        secondary_index_intervals: Default::default(),
-        data_intervals: vec![],
         pk_gen_state: (),
         empty_links_list: vec![],
+        secondary_index_types: vec![],
     };
 
     let mut space_info_page = GeneralPage {
         header: space_info_header,
         inner: space_info,
     };
-    persist_page(&mut space_info_page, &mut output_file).unwrap();
+    persist_page(&mut space_info_page, &mut output_file)
+        .await
+        .unwrap();
 
     let index_header = GeneralHeader {
         data_version: DATA_VERSION,
@@ -82,7 +81,9 @@ fn main() -> eyre::Result<()> {
         let end = usize::min(start + page_size, args.count);
 
         let (mut data_page, offsets) = generate_data_page(start as i32, end - start, data_header);
-        persist_page(&mut data_page, &mut output_file).unwrap();
+        persist_page(&mut data_page, &mut output_file)
+            .await
+            .unwrap();
 
         let index_data = create_index_data(&data_page, &offsets);
 
@@ -90,7 +91,9 @@ fn main() -> eyre::Result<()> {
             header: index_header,
             inner: index_data,
         };
-        persist_page(&mut index_page, &mut output_file).unwrap();
+        persist_page(&mut index_page, &mut output_file)
+            .await
+            .unwrap();
     }
 
     Ok(())
@@ -134,7 +137,7 @@ pub fn generate_data_page(
     )
 }
 
-fn create_index_data(page: &GeneralPage<Vec<u8>>, offsets: &[(i32, u32, u32)]) -> IndexData<i32> {
+fn create_index_data(page: &GeneralPage<Vec<u8>>, offsets: &[(i32, u32, u32)]) -> IndexPage<i32> {
     let index_values = offsets
         .iter()
         .map(|(key, offset, length)| IndexValue::<i32> {
@@ -147,5 +150,12 @@ fn create_index_data(page: &GeneralPage<Vec<u8>>, offsets: &[(i32, u32, u32)]) -
         })
         .collect();
 
-    IndexData { index_values }
+    IndexPage {
+        current_index: 0,
+        size: 1024,
+        node_id: 0,
+        current_length: 1024,
+        slots: vec![],
+        index_values: index_values,
+    }
 }

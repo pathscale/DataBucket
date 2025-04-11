@@ -211,12 +211,19 @@ pub async fn parse_space_info<const PAGE_SIZE: usize>(
     file.seek(SeekFrom::Start(0)).await?;
     let header = parse_general_header(file).await?;
 
+    println!("Header {:?}", header);
+
     let mut buffer = vec![0u8; header.data_length as usize];
+
+    println!("bufffer {:?}", buffer);
+
     file.read_exact(&mut buffer).await?;
     let archived =
         unsafe { rkyv::access_unchecked::<<SpaceInfoPage as Archive>::Archived>(&buffer[..]) };
     let space_info: SpaceInfoPage =
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+
+    println!("Space Info {:?}", space_info);
 
     Ok(space_info)
 }
