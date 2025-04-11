@@ -68,7 +68,7 @@ pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
     Serialize,
     SizeMeasure,
 )]
-pub struct PageId(u32);
+pub struct PageId(pub u32);
 
 impl PageId {
     pub fn next(self) -> Self {

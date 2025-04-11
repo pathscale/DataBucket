@@ -1,10 +1,11 @@
 use clap::Parser;
 use data_bucket::{
-    page::{parse_space_info, DataIterator, LinksIterator, PageIterator},
-    persistence::data::DataTypeValue,
-    read_data_pages, PAGE_SIZE,
+    page::parse_space_info, parse_data_page, parse_general_header_by_index,
+    persistence::data::DataTypeValue, space, PAGE_SIZE,
 };
-use std::{fs::File, str};
+use data_bucket::{parse_page, GeneralPage, SpaceInfoPage};
+use std::str;
+use tokio::fs::File;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -65,39 +66,42 @@ fn format_table(header: &Vec<String>, rows: &Vec<Vec<String>>) {
     print_horizontal_cells_delimiters(&column_widths[..]);
 }
 
-fn main() -> eyre::Result<()> {
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
     let args = Args::parse();
-    let mut file = File::open(args.filename)?;
+    let mut file = File::open(args.filename).await.unwrap();
 
-    let space_info = parse_space_info::<PAGE_SIZE>(&mut file)?;
-    let row_schema = space_info.row_schema.clone();
+    println!("{:?}", file.metadata().await);
 
-    let mut rows: Vec<Vec<DataTypeValue>> = vec![];
+    let space_info = parse_space_info::<PAGE_SIZE>(&mut file).await;
 
-    let pages = PageIterator::new(space_info.primary_key_intervals.clone());
-    for page in pages {
-        let links = LinksIterator::new(&mut file, page, &space_info).collect::<Vec<_>>();
-        for row in DataIterator::new(&mut file, row_schema.clone(), links) {
-            rows.push(row);
-        }
-    }
+    let info = parse_general_header_by_index(&mut file, 0).await;
+    let info2 = parse_data_page::<PAGE_SIZE, PAGE_SIZE>(&mut file, 0).await;
 
-    let rows: Vec<Vec<DataTypeValue>> = read_data_pages::<PAGE_SIZE>(&mut file)?;
+    let space_info2 = parse_page::<SpaceInfoPage<()>, { PAGE_SIZE as u32 }>(&mut file, 0)
+        .await
+        .unwrap();
 
-    let header: Vec<String> = row_schema
-        .iter()
-        .map(|(column, _data_type)| column.to_owned())
-        .collect();
-    let rows: Vec<Vec<String>> = rows
-        .iter()
-        .map(|row| {
-            row.iter()
-                .map(|column| column.to_string())
-                .collect::<Vec<String>>()
-        })
-        .collect();
+    //let t1 = space_info.header;
 
-    format_table(&header, &rows);
+    let _rows: Vec<Vec<DataTypeValue>> = vec![];
+
+    println!("1{:?}", space_info);
+    println!("2{:?}", space_info2);
+
+    println!("Info {:?}", info);
+    //println!("Info {:?}", info2);
+    // println!("Head er {:?}", t1);
+
+    //let pages = PageIterator::new(space_info.unwrap().primary_key_fields.clone());
+    //  for page in pages {
+    //let links = LinksIterator::new(&mut file, page, &space_info).collect::<Vec<_>>();
+    //      for row in DataIterator::new(&mut file, row_schema.clone(), links) {
+    //           rows.push(row);
+    //      }
+    //}
+
+    //let rows: Vec<Vec<DataTypeValue>> = read_data_pages::<PAGE_SIZE>(&mut file)?;
 
     Ok(())
 }
