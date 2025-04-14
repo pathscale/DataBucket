@@ -141,13 +141,13 @@ impl Generator {
         let field_sizes = self.struct_def.fields.iter().map(|f| {
             let field_type_str = f.ty.to_token_stream().to_string();
             if field_type_str.contains("Vec") {
-                self.gen_vec_size_fns(&f)
+                self.gen_vec_size_fns(f)
             } else if field_type_str.contains("String") {
-                self.gen_string_size_fn(&f)
+                self.gen_string_size_fn(f)
             } else if gens.contains(&field_type_str) && self.is_generic_unsized {
-                self.gen_generic_size_fn(&f)
+                self.gen_generic_size_fn(f)
             } else {
-                self.gen_primitive_size_fn(&f)
+                self.gen_primitive_size_fn(f)
             }
         });
 

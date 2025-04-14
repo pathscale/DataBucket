@@ -281,13 +281,13 @@ where
         let utility_bytes = utility_bytes.as_ref().to_vec();
         let utility_len = utility_bytes.len();
         let mut bytes = vec![0u8; data_length];
-        bytes.splice(0..utility_len, utility_bytes.iter().map(|v| *v));
+        bytes.splice(0..utility_len, utility_bytes.iter().copied());
 
         for ((offset, len), value) in self.slots.iter().zip(self.index_values.iter()) {
             let offset = data_length - *offset as usize;
             let len = *len as usize;
             let value_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(value).unwrap();
-            bytes.splice(offset..(offset + len), value_bytes.iter().map(|v| *v));
+            bytes.splice(offset..(offset + len), value_bytes.iter().copied());
         }
 
         bytes
@@ -296,14 +296,14 @@ where
     fn from_bytes(bytes: &[u8]) -> Self {
         let slots_size_bytes = &bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()];
         let archived =
-            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&slots_size_bytes) };
+            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(slots_size_bytes) };
         let slots_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let node_id_size_bytes = &bytes[UnsizedIndexPageUtility::<T>::slots_size_size()
             ..UnsizedIndexPageUtility::<T>::node_id_size_size()
                 + UnsizedIndexPageUtility::<T>::node_id_size_size()];
         let archived =
-            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&node_id_size_bytes) };
+            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(node_id_size_bytes) };
         let node_id_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let utility_len = UnsizedIndexPageUtility::<T>::persisted_size(
