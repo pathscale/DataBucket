@@ -1,4 +1,5 @@
 use data_bucket_codegen::Persistable;
+use indexset::core::pair::Pair;
 use rkyv::de::Pool;
 use rkyv::rancor::Strategy;
 use rkyv::ser::allocator::ArenaHandle;
@@ -7,7 +8,6 @@ use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::io::SeekFrom;
-use std::mem;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -15,7 +15,7 @@ use crate::page::index::IndexPageUtility;
 use crate::page::PageId;
 use crate::{align8, VariableSizeMeasurable};
 use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE};
-use crate::{IndexPage, Persistable};
+use crate::{Link, Persistable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct UnsizedIndexPage<
@@ -57,7 +57,8 @@ where
     T: Archive
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
-        >,
+        > + Send
+        + Sync,
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
     type Utility = UnsizedIndexPageUtility<T>;
@@ -153,7 +154,11 @@ where
         }
     }
 
-    fn rebuild(&mut self) {
+    fn rebuild(&mut self)
+    where
+        T: Clone,
+    {
+        self.node_id = self.index_values.last().unwrap().key.clone();
         self.node_id_size = self.node_id.aligned_size() as u16;
         self.last_value_offset = 0;
         let mut slots = vec![];
@@ -171,7 +176,7 @@ where
         T: Clone,
     {
         let index_values = self.index_values.split_off(index);
-        let mut new_page = UnsizedIndexPage::new_with_values(index_values);
+        let new_page = UnsizedIndexPage::new_with_values(index_values);
         self.rebuild();
 
         new_page
@@ -229,6 +234,25 @@ where
         seek_to_page_start(file, page_id.0 + 1).await?;
         file.seek(SeekFrom::Current(-(offset as i64))).await?;
         Self::read_value(file, len).await
+    }
+
+    pub fn get_node(&self) -> Vec<Pair<T, Link>>
+    where
+        T: Clone + Ord,
+    {
+        self.index_values
+            .clone()
+            .into_iter()
+            .map(|v| v.into())
+            .collect()
+    }
+
+    pub fn from_node(node: &[impl Into<IndexValue<T>> + Clone]) -> Self
+    where
+        T: Clone + Ord + Default,
+    {
+        let values = node.iter().map(|v| v.clone().into()).collect::<Vec<_>>();
+        Self::new_with_values(values)
     }
 }
 
@@ -353,6 +377,8 @@ mod test {
         let offset = page.slots.iter().map(|(_, l)| *l).sum::<u16>();
         assert_eq!(page.last_value_offset, offset as u32);
         assert_eq!(page.last_value_offset, page.slots.last().unwrap().0);
+
+        assert_ne!(page.node_id, split.node_id);
 
         assert_eq!(split.slots_size, 5);
         let offset = split.slots.iter().map(|(_, l)| *l).sum::<u16>();

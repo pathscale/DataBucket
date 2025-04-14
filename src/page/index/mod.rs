@@ -15,27 +15,29 @@ mod table_of_contents_page;
 use crate::page::PageId;
 
 pub use page::{get_index_page_size_from_data_length, IndexPage};
-pub use page_for_unsized::UnsizedIndexPage;
+pub use page_for_unsized::{UnsizedIndexPage, UnsizedIndexPageUtility};
 pub use table_of_contents_page::TableOfContentsPage;
 
 pub trait IndexPageUtility<T> {
-    type Utility: Persistable;
+    type Utility: Persistable + Send + Sync;
 
-    async fn parse_index_page_utility(
+    fn parse_index_page_utility(
         file: &mut File,
         page_id: PageId,
-    ) -> eyre::Result<Self::Utility>;
+    ) -> impl std::future::Future<Output = eyre::Result<Self::Utility>> + Send;
 
-    async fn persist_index_page_utility(
+    fn persist_index_page_utility(
         file: &mut File,
         page_id: PageId,
         utility: Self::Utility,
-    ) -> eyre::Result<()> {
-        seek_to_page_start(file, page_id.0).await?;
-        file.seek(SeekFrom::Current(GENERAL_HEADER_SIZE as i64))
-            .await?;
-        file.write_all(utility.as_bytes().as_ref()).await?;
-        Ok(())
+    ) -> impl std::future::Future<Output = eyre::Result<()>> + Send {
+        async move {
+            seek_to_page_start(file, page_id.0).await?;
+            file.seek(SeekFrom::Current(GENERAL_HEADER_SIZE as i64))
+                .await?;
+            file.write_all(utility.as_bytes().as_ref()).await?;
+            Ok(())
+        }
     }
 }
 

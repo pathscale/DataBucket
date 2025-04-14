@@ -16,7 +16,7 @@ pub use data::DataPage;
 pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{
     get_index_page_size_from_data_length, IndexPage, IndexPageUtility, IndexValue,
-    TableOfContentsPage, UnsizedIndexPage,
+    TableOfContentsPage, UnsizedIndexPage, UnsizedIndexPageUtility,
 };
 //pub use iterators::{DataIterator, LinksIterator};
 pub use space_info::{Interval, SpaceInfoPage};

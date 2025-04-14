@@ -77,7 +77,8 @@ where
     T: Archive
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
-        >,
+        > + Send
+        + Sync,
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
     type Utility = SizedIndexPageUtility<T>;
