@@ -10,6 +10,7 @@ pub fn expand(input: &TokenStream) -> syn::Result<TokenStream> {
     let attrs = Parser::parse_attributes(&input_struct.attrs);
     let gen = generator::Generator {
         is_full_row: attrs.is_full_row,
+        is_generic_unsized: attrs.is_generic_unsized,
         struct_def: input_struct,
     };
 

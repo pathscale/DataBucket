@@ -135,6 +135,59 @@ where
     }
 }
 
+impl<K, V> SizeMeasurable for indexset::core::pair::Pair<K, V>
+where
+    K: SizeMeasurable,
+    V: SizeMeasurable,
+{
+    fn aligned_size(&self) -> usize {
+        align(self.key.aligned_size() + self.value.aligned_size())
+    }
+}
+impl<K, V> SizeMeasurable for indexset::core::multipair::MultiPair<K, V>
+where
+    K: SizeMeasurable,
+    V: SizeMeasurable,
+{
+    fn aligned_size(&self) -> usize {
+        align(self.key.aligned_size() + self.value.aligned_size())
+    }
+}
+
+/// Marks an objects that can return theirs approximate size after archiving via
+/// [`rkyv`].
+pub trait VariableSizeMeasurable {
+    /// Returns approximate size of the object archiving via [`rkyv`].
+    fn aligned_size(length: usize) -> usize;
+}
+
+impl VariableSizeMeasurable for String {
+    fn aligned_size(length: usize) -> usize {
+        if length <= 8 {
+            8
+        } else {
+            align(length + 8)
+        }
+    }
+}
+
+impl<K> VariableSizeMeasurable for indexset::core::pair::Pair<K, Link>
+where
+    K: VariableSizeMeasurable,
+{
+    fn aligned_size(length: usize) -> usize {
+        align(Link::default().aligned_size() + K::aligned_size(length))
+    }
+}
+impl<K> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, Link>
+where
+    K: VariableSizeMeasurable,
+{
+    fn aligned_size(length: usize) -> usize {
+        align(Link::default().aligned_size() + K::aligned_size(length))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::util::sized::SizeMeasurable;

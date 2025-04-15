@@ -18,5 +18,6 @@ derive_more = { version = "1.0.0", features = ["from", "error", "display", "into
 rkyv = { version = "0.8.9", features = ["uuid-1"] }
 lockfree = "0.5.1"
 uuid = { version = "1.11.0", features = ["v4"] }
-indexset = { version = "0.11.2", features = ["concurrent", "cdc", "multimap"] }
+indexset = { version = "0.12.0", features = ["concurrent", "cdc", "multimap"] }
+# indexset = { path = "../indexset", version = "0.11.3", features = ["concurrent", "cdc", "multimap"] }
 tokio = { version = "1", features = ["full"] }

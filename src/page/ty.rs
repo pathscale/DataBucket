@@ -25,6 +25,8 @@ pub enum PageType {
     Data = 2,
     /// Index `Page` type.
     Index = 3,
+    /// Index for unsized type's `Page` type.
+    IndexUnsized = 30,
     /// Index's table of contests `Page` type. Is used to determine node's `PageId`.
     IndexTableOfContents = 31,
 }
