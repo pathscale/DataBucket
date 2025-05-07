@@ -1,4 +1,5 @@
 use crate::link::{Link, LINK_LENGTH};
+use ordered_float::OrderedFloat;
 use rkyv::util::AlignedVec;
 use std::{mem, sync::Arc};
 use uuid::Uuid;
@@ -60,6 +61,15 @@ impl SizeMeasurable for Link {
 impl SizeMeasurable for Uuid {
     fn aligned_size(&self) -> usize {
         16
+    }
+}
+
+impl<T> SizeMeasurable for OrderedFloat<T>
+where
+    T: SizeMeasurable,
+{
+    fn aligned_size(&self) -> usize {
+        self.0.aligned_size()
     }
 }
 
