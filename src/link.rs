@@ -18,6 +18,7 @@ pub const LINK_LENGTH: usize = 12;
     PartialOrd,
     Serialize,
 )]
+#[rkyv(derive(Debug, PartialOrd, PartialEq, Eq, Ord))]
 pub struct Link {
     pub page_id: page::PageId,
     pub offset: u32,
