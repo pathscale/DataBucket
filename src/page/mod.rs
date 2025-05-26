@@ -24,7 +24,7 @@ pub use ty::PageType;
 pub use util::{
     map_data_pages_to_general, parse_data_page, parse_data_pages_batch,
     parse_general_header_by_index, parse_page, parse_pages_batch, parse_space_info, persist_page,
-    seek_by_link, seek_to_page_start, update_at,
+    persist_pages_batch, seek_by_link, seek_to_page_start, update_at,
 };
 
 // TODO: Move to config

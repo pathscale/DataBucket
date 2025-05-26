@@ -9,6 +9,7 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use crate::{seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE};
 
 mod page;
+mod page_cdc_impl;
 mod page_for_unsized;
 mod table_of_contents_page;
 

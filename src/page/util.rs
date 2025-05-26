@@ -50,11 +50,7 @@ where
     seek_to_page_start(file, page.header.page_id.0).await?;
 
     let page_count = page.header.page_id.0 as i64 + 1;
-    let inner_bytes = page.inner.as_bytes();
-    page.header.data_length = inner_bytes.as_ref().len() as u32;
-
-    file.write_all(page.header.as_bytes().as_ref()).await?;
-    file.write_all(inner_bytes.as_ref()).await?;
+    persist_page_in_place(page, file).await?;
     let curr_position = file.stream_position().await?;
     file.seek(SeekFrom::Current(
         (page_count * PAGE_SIZE as i64) - curr_position as i64,
@@ -62,6 +58,43 @@ where
     .await?;
 
     Ok(())
+}
+
+async fn persist_page_in_place<'a, T>(
+    page: &'a mut GeneralPage<T>,
+    file: &'a mut File,
+) -> eyre::Result<()>
+where
+    T: Persistable + Send + Sync,
+{
+    let inner_bytes = page.inner.as_bytes();
+    page.header.data_length = inner_bytes.as_ref().len() as u32;
+    file.write_all(page.header.as_bytes().as_ref()).await?;
+    file.write_all(inner_bytes.as_ref()).await?;
+    Ok(())
+}
+
+pub async fn persist_pages_batch<'a, T>(
+    pages: Vec<GeneralPage<T>>,
+    file: &'a mut File,
+) -> eyre::Result<()>
+where
+    T: Persistable + Send + Sync,
+{
+    let mut iter = pages.into_iter();
+    if let Some(mut page) = iter.next() {
+        seek_to_page_start(file, page.header.page_id.0).await?;
+        persist_page_in_place(&mut page, file).await?;
+
+        for mut page in iter {
+            seek_to_page_start_relatively(file, page.header.page_id.0).await?;
+            persist_page_in_place(&mut page, file).await?;
+        }
+
+        Ok(())
+    } else {
+        Ok(())
+    }
 }
 
 pub async fn seek_to_page_start(file: &mut File, index: u32) -> eyre::Result<()> {
