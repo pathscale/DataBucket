@@ -47,17 +47,143 @@ where
 }
 
 /// Represents a page, which is filled with [`IndexValue`]'s of some index.
-#[derive(
-    Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Persistable,
-)]
-#[persistable(by_parts)]
+#[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct IndexPage<T: Default + SizeMeasurable> {
     pub size: u16,
-    pub node_id: T,
+    pub node_id: IndexValue<T>,
     pub current_index: u16,
     pub current_length: u16,
     pub slots: Vec<u16>,
     pub index_values: Vec<IndexValue<T>>,
+}
+
+impl<T: Default + SizeMeasurable> Persistable for IndexPage<T>
+where
+    T: rkyv::Archive
+        + for<'a> rkyv::Serialize<
+            rkyv::rancor::Strategy<
+                rkyv::ser::Serializer<
+                    rkyv::util::AlignedVec,
+                    rkyv::ser::allocator::ArenaHandle<'a>,
+                    rkyv::ser::sharing::Share,
+                >,
+                rkyv::rancor::Error,
+            >,
+        >,
+    <T as rkyv::Archive>::Archived:
+        rkyv::Deserialize<T, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
+{
+    fn as_bytes(&self) -> impl AsRef<[u8]> {
+        let mut bytes = vec![];
+        let val_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&self.size).unwrap();
+        bytes.extend_from_slice(val_bytes.as_ref());
+        let val_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&self.node_id).unwrap();
+        bytes.extend_from_slice(val_bytes.as_ref());
+        let val_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&self.current_index).unwrap();
+        bytes.extend_from_slice(val_bytes.as_ref());
+        let val_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&self.current_length).unwrap();
+        bytes.extend_from_slice(val_bytes.as_ref());
+        let val_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&self.slots).unwrap();
+        bytes.extend_from_slice(val_bytes.as_ref());
+        let val_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&self.index_values).unwrap();
+        bytes.extend_from_slice(val_bytes.as_ref());
+        bytes
+    }
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let mut offset = 0usize;
+        let size_length = <u16 as Default>::default().aligned_size();
+        let archived = unsafe {
+            rkyv::access_unchecked::<<u16 as Archive>::Archived>(
+                &bytes[offset..offset + size_length],
+            )
+        };
+        let size =
+            rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
+        offset += size_length;
+        let length = <IndexValue<T> as Default>::default().aligned_size();
+        let mut v = rkyv::util::AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + length]);
+        let archived =
+            unsafe { rkyv::access_unchecked::<<IndexValue<T> as Archive>::Archived>(&v[..]) };
+        let node_id =
+            rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+        offset += length;
+        let length = <u16 as Default>::default().aligned_size();
+        let mut v = rkyv::util::AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + length]);
+        let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&v[..]) };
+        let current_index =
+            rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+        offset += length;
+        let length = <u16 as Default>::default().aligned_size();
+        let mut v = rkyv::util::AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + length]);
+        let archived = unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(&v[..]) };
+        let current_length =
+            rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+        offset += length;
+        let values_len = align(size as usize * <u16 as Default>::default().aligned_size()) + 8;
+        let mut v = rkyv::util::AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + values_len]);
+        let archived = unsafe { rkyv::access_unchecked::<<Vec<u16> as Archive>::Archived>(&v[..]) };
+        let slots = rkyv::deserialize::<Vec<u16>, rkyv::rancor::Error>(archived)
+            .expect("data should be valid");
+        offset += values_len;
+        let values_len =
+            size as usize * align8(<IndexValue<T> as Default>::default().aligned_size()) + 8;
+        let mut v = rkyv::util::AlignedVec::<4>::new();
+        v.extend_from_slice(&bytes[offset..offset + values_len]);
+        let archived =
+            unsafe { rkyv::access_unchecked::<<Vec<IndexValue<T>> as Archive>::Archived>(&v[..]) };
+        let index_values = rkyv::deserialize::<Vec<IndexValue<T>>, rkyv::rancor::Error>(archived)
+            .expect("data should be valid");
+        offset += values_len;
+        Self {
+            size,
+            node_id,
+            current_index,
+            current_length,
+            slots,
+            index_values,
+        }
+    }
+}
+impl<T: Default + SizeMeasurable> IndexPage<T>
+where
+    T: Default + SizeMeasurable,
+{
+    pub fn size_size() -> usize {
+        <u16 as Default>::default().aligned_size()
+    }
+    pub fn node_id_size() -> usize {
+        <IndexValue<T> as Default>::default().aligned_size()
+    }
+    pub fn current_index_size() -> usize {
+        <u16 as Default>::default().aligned_size()
+    }
+    pub fn current_length_size() -> usize {
+        <u16 as Default>::default().aligned_size()
+    }
+    pub fn slots_value_size() -> usize {
+        <u16 as Default>::default().aligned_size()
+    }
+    pub fn slots_size(length: usize) -> usize {
+        align(length * <u16 as Default>::default().aligned_size()) + 8
+    }
+    pub fn index_values_value_size() -> usize {
+        align8(<IndexValue<T> as Default>::default().aligned_size())
+    }
+    pub fn index_values_size(length: usize) -> usize {
+        length * align8(<IndexValue<T> as Default>::default().aligned_size()) + 8
+    }
+    pub fn persisted_size(size: usize) -> usize {
+        Self::size_size()
+            + Self::node_id_size()
+            + Self::current_index_size()
+            + Self::current_length_size()
+            + Self::slots_size(size)
+            + Self::index_values_size(size)
+    }
 }
 
 #[derive(
@@ -66,7 +192,7 @@ pub struct IndexPage<T: Default + SizeMeasurable> {
 #[persistable(by_parts)]
 pub struct SizedIndexPageUtility<T: Default + SizeMeasurable> {
     pub size: u16,
-    pub node_id: T,
+    pub node_id: IndexValue<T>,
     pub current_index: u16,
     pub current_length: u16,
     pub slots: Vec<u16>,
@@ -115,7 +241,7 @@ where
 }
 
 impl<T: Default + SizeMeasurable> IndexPage<T> {
-    pub fn new(node_id: T, size: usize) -> Self
+    pub fn new(node_id: IndexValue<T>, size: usize) -> Self
     where
         T: Clone,
     {
@@ -151,9 +277,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         new_page.current_length = self.current_length - index as u16;
 
         self.current_index = first_empty_value;
-        self.node_id = self.index_values[self.slots[index - 1] as usize]
-            .key
-            .clone();
+        self.node_id = self.index_values[self.slots[index - 1] as usize].clone();
         self.current_length = index as u16;
 
         new_page
@@ -284,8 +408,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
                 node.last()
                     .expect("should contain at least one key")
                     .clone(),
-            )
-            .key,
+            ),
             size,
         );
 
@@ -308,7 +431,13 @@ mod tests {
     #[test]
     fn test_bytes() {
         let size: usize = get_index_page_size_from_data_length::<u64>(INNER_PAGE_SIZE);
-        let page = IndexPage::<u64>::new(1, size);
+        let page = IndexPage::<u64>::new(
+            IndexValue {
+                key: 1,
+                link: Default::default(),
+            },
+            size,
+        );
         let bytes = page.as_bytes();
         let new_page = IndexPage::<u64>::from_bytes(bytes.as_ref());
 
@@ -321,7 +450,13 @@ mod tests {
 
     #[test]
     fn test_split() {
-        let mut page = IndexPage::<u64>::new(7, 8);
+        let mut page = IndexPage::<u64>::new(
+            IndexValue {
+                key: 7,
+                link: Default::default(),
+            },
+            8,
+        );
         page.slots = vec![0, 1, 2, 3, 4, 5, 6, 7];
         page.current_index = 8;
         page.current_length = 8;

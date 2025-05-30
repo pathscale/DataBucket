@@ -36,6 +36,9 @@ pub fn align_vec<const ALIGNMENT: usize>(mut v: AlignedVec<ALIGNMENT>) -> Aligne
 pub trait SizeMeasurable {
     /// Returns approximate size of the object archiving via [`rkyv`].
     fn aligned_size(&self) -> usize;
+    fn align() -> Option<usize> {
+        None
+    }
 }
 
 macro_rules! size_measurable_for_sized {
@@ -44,6 +47,9 @@ macro_rules! size_measurable_for_sized {
             impl SizeMeasurable for $t {
                 fn aligned_size(&self) -> usize {
                     mem::size_of::<$t>()
+                }
+                fn align() -> Option<usize> {
+                    Some(align(mem::size_of::<$t>()))
                 }
             }
         )+
@@ -201,6 +207,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::util::sized::SizeMeasurable;
+    use crate::IndexValue;
 
     #[test]
     fn test_string() {
@@ -210,6 +217,22 @@ mod test {
             assert_eq!(
                 s.aligned_size(),
                 rkyv::to_bytes::<rkyv::rancor::Error>(&s).unwrap().len()
+            )
+        }
+    }
+
+    #[test]
+    fn test_index_value_str() {
+        // Test if approximate size is correct for strings
+        for i in 0..10_000 {
+            let s = String::from_utf8(vec![b'a'; i]).unwrap();
+            let v = IndexValue {
+                key: s,
+                link: Default::default(),
+            };
+            assert_eq!(
+                v.aligned_size(),
+                rkyv::to_bytes::<rkyv::rancor::Error>(&v).unwrap().len()
             )
         }
     }

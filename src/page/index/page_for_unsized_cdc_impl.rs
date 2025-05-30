@@ -35,24 +35,24 @@ where
                 value,
                 index,
             } => {
-                if value.key > self.node_id {
-                    self.node_id = value.key.clone();
+                if value.key > self.node_id.key {
+                    self.node_id = value.clone().into();
                     self.node_id_size = value.key.aligned_size() as u16;
                 }
                 self.apply_insert_at(index, value)?;
                 Ok(())
             }
             ChangeEvent::RemoveAt {
-                max_value: _,
+                max_value,
                 value,
                 index,
             } => {
-                if &value.key == &self.node_id {
+                if &value == &max_value {
                     let new_node_id = self
                         .index_values
                         .get(index - 1)
                         .expect("should be available");
-                    self.node_id = new_node_id.key.clone();
+                    self.node_id = new_node_id.clone();
                     self.node_id_size = new_node_id.key.aligned_size() as u16;
                 }
                 self.apply_remove_at(index)?;
@@ -105,13 +105,10 @@ mod test {
 
     #[test]
     fn test_insert_at() {
-        let mut page = UnsizedIndexPage::<_, 1024>::new(
-            "Something".to_string(),
-            IndexValue {
-                key: "Something".to_string(),
-                link: Default::default(),
-            },
-        )
+        let mut page = UnsizedIndexPage::<_, 1024>::new(IndexValue {
+            key: "Something".to_string(),
+            link: Default::default(),
+        })
         .unwrap();
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
@@ -122,35 +119,27 @@ mod test {
                 key: "Something new".to_string(),
                 value: Link::default(),
             },
-            index: 0,
+            index: 1,
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, "Something new".to_string());
+        assert_eq!(page.node_id.key, "Something new".to_string());
     }
 
     #[test]
     fn test_remove_at() {
-        let mut page = IndexPage::new(1, 10);
+        let mut page = UnsizedIndexPage::<_, 1024>::new(IndexValue {
+            key: "Something".to_string(),
+            link: Default::default(),
+        })
+        .unwrap();
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
-                key: 1,
+                key: "Something".to_string(),
                 value: Link::default(),
             },
             value: Pair {
-                key: 1,
-                value: Link::default(),
-            },
-            index: 0,
-        };
-        page.apply_change_event(event).unwrap();
-        let event = ChangeEvent::InsertAt {
-            max_value: Pair {
-                key: 1,
-                value: Link::default(),
-            },
-            value: Pair {
-                key: 2,
+                key: "Something new".to_string(),
                 value: Link::default(),
             },
             index: 1,
@@ -158,50 +147,34 @@ mod test {
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::RemoveAt {
             max_value: Pair {
-                key: 2,
+                key: "Something new".to_string(),
                 value: Link::default(),
             },
             value: Pair {
-                key: 1,
+                key: "Something".to_string(),
                 value: Link::default(),
             },
             index: 0,
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, 2);
-        assert_eq!(page.index_values[0], IndexValue::default());
-        assert_eq!(
-            page.index_values[1],
-            IndexValue {
-                key: 2,
-                link: Link::default(),
-            }
-        )
+        assert_eq!(page.node_id.key, "Something new".to_string());
     }
 
     #[test]
     fn test_remove_at_node_id() {
-        let mut page = IndexPage::new(1, 10);
+        let mut page = UnsizedIndexPage::<_, 1024>::new(IndexValue {
+            key: "Something".to_string(),
+            link: Default::default(),
+        })
+        .unwrap();
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
-                key: 1,
+                key: "Something".to_string(),
                 value: Link::default(),
             },
             value: Pair {
-                key: 1,
-                value: Link::default(),
-            },
-            index: 0,
-        };
-        page.apply_change_event(event).unwrap();
-        let event = ChangeEvent::InsertAt {
-            max_value: Pair {
-                key: 1,
-                value: Link::default(),
-            },
-            value: Pair {
-                key: 2,
+                key: "Something new".to_string(),
                 value: Link::default(),
             },
             index: 1,
@@ -209,25 +182,17 @@ mod test {
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::RemoveAt {
             max_value: Pair {
-                key: 2,
+                key: "Something new".to_string(),
                 value: Link::default(),
             },
             value: Pair {
-                key: 2,
+                key: "Something new".to_string(),
                 value: Link::default(),
             },
             index: 1,
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, 1);
-        assert_eq!(
-            page.index_values[0],
-            IndexValue {
-                key: 1,
-                link: Link::default(),
-            }
-        );
-        assert_eq!(page.index_values[1], IndexValue::default())
+        assert_eq!(page.node_id.key, "Something".to_string());
     }
 }

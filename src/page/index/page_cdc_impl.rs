@@ -20,6 +20,7 @@ where
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         > + PartialEq
         + PartialOrd
+        + Ord
         + Send
         + Sync,
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
@@ -31,8 +32,8 @@ where
                 value,
                 index,
             } => {
-                if value.key > self.node_id {
-                    self.node_id = value.key.clone();
+                if value.key > self.node_id.key {
+                    self.node_id = value.clone().into();
                 }
                 self.apply_insert_at(index, value)?;
                 Ok(())
@@ -43,12 +44,12 @@ where
                 index,
             } => {
                 println!("{:?}", event);
-                if &max_value.key == &value.key && self.current_length != 1 {
+                if &max_value == &value && self.current_length != 1 {
                     // If we are removing max value, we need to update node_id.
                     // It will be previous value in a node.
                     let previous_value_pos = self.slots[index - 1];
                     let value = &self.index_values[previous_value_pos as usize];
-                    self.node_id = value.key.clone();
+                    self.node_id = value.clone();
                 }
                 self.apply_remove_at(index, value)?;
                 Ok(())
@@ -111,7 +112,13 @@ mod test {
 
     #[test]
     fn test_insert_at() {
-        let mut page = IndexPage::new(1, 10);
+        let mut page = IndexPage::new(
+            IndexValue {
+                key: 1,
+                link: Default::default(),
+            },
+            10,
+        );
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
                 key: 1,
@@ -125,7 +132,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, 1);
+        assert_eq!(page.node_id.key, 1);
         assert_eq!(
             page.index_values[0],
             IndexValue {
@@ -137,7 +144,13 @@ mod test {
 
     #[test]
     fn test_insert_at_second() {
-        let mut page = IndexPage::new(1, 10);
+        let mut page = IndexPage::new(
+            IndexValue {
+                key: 1,
+                link: Default::default(),
+            },
+            10,
+        );
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
                 key: 1,
@@ -163,7 +176,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, 2);
+        assert_eq!(page.node_id.key, 2);
         assert_eq!(
             page.index_values[0],
             IndexValue {
@@ -182,7 +195,13 @@ mod test {
 
     #[test]
     fn test_remove_at() {
-        let mut page = IndexPage::new(1, 10);
+        let mut page = IndexPage::new(
+            IndexValue {
+                key: 1,
+                link: Default::default(),
+            },
+            10,
+        );
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
                 key: 1,
@@ -220,7 +239,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, 2);
+        assert_eq!(page.node_id.key, 2);
         assert_eq!(page.index_values[0], IndexValue::default());
         assert_eq!(
             page.index_values[1],
@@ -233,7 +252,13 @@ mod test {
 
     #[test]
     fn test_remove_at_node_id() {
-        let mut page = IndexPage::new(1, 10);
+        let mut page = IndexPage::new(
+            IndexValue {
+                key: 1,
+                link: Default::default(),
+            },
+            10,
+        );
         let event = ChangeEvent::InsertAt {
             max_value: Pair {
                 key: 1,
@@ -271,7 +296,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
 
-        assert_eq!(page.node_id, 1);
+        assert_eq!(page.node_id.key, 1);
         assert_eq!(
             page.index_values[0],
             IndexValue {
