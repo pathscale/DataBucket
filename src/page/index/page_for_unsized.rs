@@ -7,6 +7,7 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
+use std::fmt::Debug;
 use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -55,6 +56,7 @@ impl<T: Default + SizeMeasurable + VariableSizeMeasurable, const DATA_LENGTH: u3
     IndexPageUtility<T> for UnsizedIndexPage<T, DATA_LENGTH>
 where
     T: Archive
+        + Debug
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         > + Send
@@ -261,6 +263,7 @@ where
     T: Archive
         + Clone
         + Default
+        + Debug
         + SizeMeasurable
         + VariableSizeMeasurable
         + for<'a> Serialize<

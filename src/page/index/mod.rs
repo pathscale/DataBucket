@@ -11,6 +11,7 @@ use crate::{seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADE
 mod page;
 mod page_cdc_impl;
 mod page_for_unsized;
+mod page_for_unsized_cdc_impl;
 mod table_of_contents_page;
 
 use crate::page::PageId;

@@ -133,7 +133,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
 
     pub fn split(&mut self, index: usize) -> IndexPage<T>
     where
-        T: Clone,
+        T: Clone + Debug,
     {
         let mut new_page = IndexPage::new(self.node_id.clone(), self.size as usize);
         let mut first_empty_value = u16::MAX;

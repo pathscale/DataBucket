@@ -159,7 +159,7 @@ pub async fn parse_general_header(file: &mut File) -> eyre::Result<GeneralHeader
     Ok(header)
 }
 
-pub async fn parse_page<Page, const PAGE_SIZE: u32>(
+pub async fn parse_page<Page, const INNER_PAGE_SIZE: u32>(
     file: &mut File,
     index: u32,
 ) -> eyre::Result<GeneralPage<Page>>
@@ -169,10 +169,10 @@ where
         rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
 {
     seek_to_page_start(file, index).await?;
-    parse_page_in_place::<Page, PAGE_SIZE>(file).await
+    parse_page_in_place::<Page, INNER_PAGE_SIZE>(file).await
 }
 
-async fn parse_page_in_place<Page, const PAGE_SIZE: u32>(
+async fn parse_page_in_place<Page, const INNER_PAGE_SIZE: u32>(
     file: &mut File,
 ) -> eyre::Result<GeneralPage<Page>>
 where
@@ -182,7 +182,7 @@ where
 {
     let header = parse_general_header(file).await?;
     let length = if header.data_length == 0 {
-        PAGE_SIZE
+        INNER_PAGE_SIZE
     } else {
         header.data_length
     };
