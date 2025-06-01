@@ -192,7 +192,6 @@ impl Generator {
                     self.gen_from_bytes_for_string(&f.ty, ident, &size_fields)
                 } else if field_type_str
                     .split("<")
-                    .into_iter()
                     .any(|v| gens.contains(&v.replace(">", "").trim().to_string()))
                     && self.is_generic_unsized
                 {

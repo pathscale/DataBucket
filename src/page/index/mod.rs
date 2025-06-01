@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::io::SeekFrom;
 
 use indexset::core::multipair::MultiPair;

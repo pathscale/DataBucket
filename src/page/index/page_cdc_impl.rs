@@ -1,5 +1,6 @@
-use crate::{IndexPage, IndexPageUtility, IndexValue, Link, SizeMeasurable};
-use eyre::{bail, eyre};
+use std::fmt::Debug;
+
+use eyre::bail;
 use indexset::cdc::change::ChangeEvent;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -9,7 +10,8 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::fmt::Debug;
+
+use crate::{IndexPage, IndexValue, Link, SizeMeasurable};
 
 impl<T: Default + SizeMeasurable> IndexPage<T>
 where
@@ -23,7 +25,12 @@ where
         + Ord
         + Send
         + Sync,
-    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+        + Ord
+        + Eq
+        + PartialEq
+        + PartialOrd
+        + Debug,
 {
     pub fn apply_change_event(&mut self, event: ChangeEvent<Pair<T, Link>>) -> eyre::Result<()> {
         match event.clone() {
@@ -35,6 +42,9 @@ where
                 if value.key > self.node_id.key {
                     self.node_id = value.clone().into();
                 }
+                if index == self.current_length as usize {
+                    self.node_id = value.clone().into();
+                }
                 self.apply_insert_at(index, value)?;
                 Ok(())
             }
@@ -43,15 +53,14 @@ where
                 value,
                 index,
             } => {
-                println!("{:?}", event);
-                if &max_value == &value && self.current_length != 1 {
+                if max_value == value && index != 0 {
                     // If we are removing max value, we need to update node_id.
                     // It will be previous value in a node.
                     let previous_value_pos = self.slots[index - 1];
                     let value = &self.index_values[previous_value_pos as usize];
                     self.node_id = value.clone();
                 }
-                self.apply_remove_at(index, value)?;
+                self.apply_remove_at(index)?;
                 Ok(())
             }
             ChangeEvent::SplitNode { .. }
@@ -90,7 +99,7 @@ where
         Ok(())
     }
 
-    fn apply_remove_at(&mut self, index: usize, value: Pair<T, Link>) -> eyre::Result<()> {
+    fn apply_remove_at(&mut self, index: usize) -> eyre::Result<()> {
         // For remove we first remove slot entry for  index value
         let value_position = self.slots.remove(index);
         // We push 0 in the tail because slots size should be fixed.

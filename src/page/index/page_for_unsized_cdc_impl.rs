@@ -1,8 +1,4 @@
-use crate::{
-    IndexPage, IndexPageUtility, IndexValue, Link, SizeMeasurable, UnsizedIndexPage,
-    VariableSizeMeasurable,
-};
-use eyre::{bail, eyre};
+use eyre::bail;
 use indexset::cdc::change::ChangeEvent;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -12,7 +8,8 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::hash::Hash;
+
+use crate::{IndexValue, Link, SizeMeasurable, UnsizedIndexPage, VariableSizeMeasurable};
 
 impl<T, const DATA_LENGTH: u32> UnsizedIndexPage<T, DATA_LENGTH>
 where
@@ -37,7 +34,11 @@ where
             } => {
                 if value.key > self.node_id.key {
                     self.node_id = value.clone().into();
-                    self.node_id_size = value.key.aligned_size() as u16;
+                    self.node_id_size = value.aligned_size() as u16;
+                }
+                if index == self.slots_size as usize {
+                    self.node_id = value.clone().into();
+                    self.node_id_size = value.aligned_size() as u16;
                 }
                 self.apply_insert_at(index, value)?;
                 Ok(())
@@ -47,13 +48,13 @@ where
                 value,
                 index,
             } => {
-                if &value == &max_value {
+                if value == max_value {
                     let new_node_id = self
                         .index_values
                         .get(index - 1)
                         .expect("should be available");
                     self.node_id = new_node_id.clone();
-                    self.node_id_size = new_node_id.key.aligned_size() as u16;
+                    self.node_id_size = new_node_id.aligned_size() as u16;
                 }
                 self.apply_remove_at(index)?;
                 Ok(())
@@ -99,7 +100,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexPage, IndexValue, Link, UnsizedIndexPage};
+    use crate::{IndexValue, Link, UnsizedIndexPage};
     use indexset::cdc::change::ChangeEvent;
     use indexset::core::pair::Pair;
 

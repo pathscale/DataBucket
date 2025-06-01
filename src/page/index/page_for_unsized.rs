@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::io::SeekFrom;
+
 use data_bucket_codegen::Persistable;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -6,9 +9,7 @@ use rkyv::ser::allocator::ArenaHandle;
 use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
-use rkyv::{to_bytes, Archive, Deserialize, Serialize};
-use std::fmt::Debug;
-use std::io::SeekFrom;
+use rkyv::{Archive, Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -123,8 +124,6 @@ where
 {
     pub fn new(node_id: IndexValue<T>) -> eyre::Result<Self> {
         let len = node_id.aligned_size() as u32;
-        println!("{:?}", to_bytes(&node_id).unwrap().len());
-        println!("{:?}", len);
         Ok(Self {
             slots_size: 1,
             node_id_size: len as u16,
@@ -286,15 +285,6 @@ where
         let utility_bytes = utility.as_bytes();
         let utility_bytes = utility_bytes.as_ref().to_vec();
         let utility_len = utility_bytes.len();
-        println!("{:?}", utility_bytes);
-        println!(
-            "{:?}",
-            UnsizedIndexPageUtility::<T>::persisted_size(
-                self.slots_size as usize,
-                self.node_id_size as usize
-            )
-        );
-        println!("{:?}", utility_len);
         let mut bytes = vec![0u8; data_length];
         bytes.splice(0..utility_len, utility_bytes.iter().copied());
 
@@ -356,14 +346,6 @@ mod test {
 
     #[test]
     fn to_bytes_and_back() {
-        let value = IndexValue {
-            key: "Someone from somewhere".to_string(),
-            link: Link {
-                page_id: 0.into(),
-                offset: 0,
-                length: 40,
-            },
-        };
         let page = UnsizedIndexPage::<_, 1024>::new(IndexValue {
             key: "Someone from somewhere".to_string(),
             link: Default::default(),

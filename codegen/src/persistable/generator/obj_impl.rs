@@ -108,7 +108,6 @@ impl Generator {
                     }
                 } else if field_type_str
                     .split("<")
-                    .into_iter()
                     .any(|v| gens.contains(&v.replace(">", "").trim().to_string()))
                     && self.is_generic_unsized
                 {
@@ -151,7 +150,6 @@ impl Generator {
                 self.gen_string_size_fn(f)
             } else if field_type_str
                 .split("<")
-                .into_iter()
                 .any(|v| gens.contains(&v.replace(">", "").trim().to_string()))
                 && self.is_generic_unsized
             {

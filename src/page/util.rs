@@ -74,10 +74,7 @@ where
     Ok(())
 }
 
-pub async fn persist_pages_batch<'a, T>(
-    pages: Vec<GeneralPage<T>>,
-    file: &'a mut File,
-) -> eyre::Result<()>
+pub async fn persist_pages_batch<T>(pages: Vec<GeneralPage<T>>, file: &mut File) -> eyre::Result<()>
 where
     T: Persistable + Send + Sync,
 {
