@@ -190,7 +190,11 @@ impl Generator {
                     self.gen_from_bytes_for_vec(&f.ty, ident, &size_fields)
                 } else if field_type_str.contains("String") {
                     self.gen_from_bytes_for_string(&f.ty, ident, &size_fields)
-                } else if gens.contains(&field_type_str) && self.is_generic_unsized {
+                } else if field_type_str
+                    .split("<")
+                    .any(|v| gens.contains(&v.replace(">", "").trim().to_string()))
+                    && self.is_generic_unsized
+                {
                     self.gen_from_bytes_for_unsized_generic(&f.ty, ident, &size_fields)
                 } else {
                     self.gen_from_bytes_for_primitive(&f.ty, ident)
@@ -208,7 +212,7 @@ impl Generator {
             let size_type = &f.ty;
             let size_ident = f.ident.as_ref().unwrap();
             quote! {
-                let size_length = #size_type::default().aligned_size();
+                let size_length = <#size_type as Default>::default().aligned_size();
                 let archived =
                     unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[offset..offset + size_length]) };
                 let #size_ident =
@@ -233,7 +237,7 @@ impl Generator {
 
     fn gen_from_bytes_for_primitive(&self, ty: &Type, ident: &Ident) -> TokenStream {
         quote! {
-            let length = #ty::default().aligned_size();
+            let length = <#ty as Default>::default().aligned_size();
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + length]);
             let archived = unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };

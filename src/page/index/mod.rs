@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::io::SeekFrom;
 
 use indexset::core::multipair::MultiPair;
@@ -6,10 +7,15 @@ use rkyv::{Archive, Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
-use crate::{seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE};
+use crate::{
+    align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, VariableSizeMeasurable,
+    GENERAL_HEADER_SIZE,
+};
 
 mod page;
+mod page_cdc_impl;
 mod page_for_unsized;
+mod page_for_unsized_cdc_impl;
 mod table_of_contents_page;
 
 use crate::page::PageId;
@@ -56,7 +62,21 @@ where
     T: SizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
-        self.key.aligned_size() + self.link.aligned_size()
+        if let Some(align) = T::align() {
+            if align % 8 == 0 {
+                return align8(self.key.aligned_size() + self.link.aligned_size());
+            }
+        }
+        align(self.key.aligned_size() + self.link.aligned_size())
+    }
+}
+
+impl<T> VariableSizeMeasurable for IndexValue<T>
+where
+    T: VariableSizeMeasurable,
+{
+    fn aligned_size(length: usize) -> usize {
+        length
     }
 }
 

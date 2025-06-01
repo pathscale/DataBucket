@@ -53,7 +53,7 @@ where
 #[persistable(by_parts)]
 pub struct IndexPage<T: Default + SizeMeasurable> {
     pub size: u16,
-    pub node_id: T,
+    pub node_id: IndexValue<T>,
     pub current_index: u16,
     pub current_length: u16,
     pub slots: Vec<u16>,
@@ -66,7 +66,7 @@ pub struct IndexPage<T: Default + SizeMeasurable> {
 #[persistable(by_parts)]
 pub struct SizedIndexPageUtility<T: Default + SizeMeasurable> {
     pub size: u16,
-    pub node_id: T,
+    pub node_id: IndexValue<T>,
     pub current_index: u16,
     pub current_length: u16,
     pub slots: Vec<u16>,
@@ -115,7 +115,7 @@ where
 }
 
 impl<T: Default + SizeMeasurable> IndexPage<T> {
-    pub fn new(node_id: T, size: usize) -> Self
+    pub fn new(node_id: IndexValue<T>, size: usize) -> Self
     where
         T: Clone,
     {
@@ -133,7 +133,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
 
     pub fn split(&mut self, index: usize) -> IndexPage<T>
     where
-        T: Clone,
+        T: Clone + Debug,
     {
         let mut new_page = IndexPage::new(self.node_id.clone(), self.size as usize);
         let mut first_empty_value = u16::MAX;
@@ -151,9 +151,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         new_page.current_length = self.current_length - index as u16;
 
         self.current_index = first_empty_value;
-        self.node_id = self.index_values[self.slots[index - 1] as usize]
-            .key
-            .clone();
+        self.node_id = self.index_values[self.slots[index - 1] as usize].clone();
         self.current_length = index as u16;
 
         new_page
@@ -284,8 +282,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
                 node.last()
                     .expect("should contain at least one key")
                     .clone(),
-            )
-            .key,
+            ),
             size,
         );
 
@@ -308,7 +305,13 @@ mod tests {
     #[test]
     fn test_bytes() {
         let size: usize = get_index_page_size_from_data_length::<u64>(INNER_PAGE_SIZE);
-        let page = IndexPage::<u64>::new(1, size);
+        let page = IndexPage::<u64>::new(
+            IndexValue {
+                key: 1,
+                link: Default::default(),
+            },
+            size,
+        );
         let bytes = page.as_bytes();
         let new_page = IndexPage::<u64>::from_bytes(bytes.as_ref());
 
@@ -321,7 +324,13 @@ mod tests {
 
     #[test]
     fn test_split() {
-        let mut page = IndexPage::<u64>::new(7, 8);
+        let mut page = IndexPage::<u64>::new(
+            IndexValue {
+                key: 7,
+                link: Default::default(),
+            },
+            8,
+        );
         page.slots = vec![0, 1, 2, 3, 4, 5, 6, 7];
         page.current_index = 8;
         page.current_length = 8;

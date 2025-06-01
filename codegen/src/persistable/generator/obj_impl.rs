@@ -106,7 +106,11 @@ impl Generator {
                     quote! {
                         Self::#fn_ident(#size_ident)
                     }
-                } else if gens.contains(&field_type_str) && self.is_generic_unsized {
+                } else if field_type_str
+                    .split("<")
+                    .any(|v| gens.contains(&v.replace(">", "").trim().to_string()))
+                    && self.is_generic_unsized
+                {
                     quote! {
                         #size_ident
                     }
@@ -144,7 +148,11 @@ impl Generator {
                 self.gen_vec_size_fns(f)
             } else if field_type_str.contains("String") {
                 self.gen_string_size_fn(f)
-            } else if gens.contains(&field_type_str) && self.is_generic_unsized {
+            } else if field_type_str
+                .split("<")
+                .any(|v| gens.contains(&v.replace(">", "").trim().to_string()))
+                && self.is_generic_unsized
+            {
                 self.gen_generic_size_fn(f)
             } else {
                 self.gen_primitive_size_fn(f)

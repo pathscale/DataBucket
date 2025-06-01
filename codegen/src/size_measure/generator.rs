@@ -30,11 +30,29 @@ impl Generator {
             })
             .collect::<Vec<_>>();
 
+        let align_check = self
+            .struct_def
+            .fields
+            .iter()
+            .map(|f| {
+                let t = &f.ty;
+                quote! {
+                    if #t::align() == Some(8) {
+                        return Some(8)
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
         quote! {
             impl SizeMeasurable for #struct_ident {
                 fn aligned_size(&self) -> usize {
                     let len = #(#sum+)* 0;
                     align(len)
+                }
+                fn align() -> Option<usize> {
+                    #(#align_check)*
+                    None
                 }
             }
         }

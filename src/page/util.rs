@@ -50,11 +50,7 @@ where
     seek_to_page_start(file, page.header.page_id.0).await?;
 
     let page_count = page.header.page_id.0 as i64 + 1;
-    let inner_bytes = page.inner.as_bytes();
-    page.header.data_length = inner_bytes.as_ref().len() as u32;
-
-    file.write_all(page.header.as_bytes().as_ref()).await?;
-    file.write_all(inner_bytes.as_ref()).await?;
+    persist_page_in_place(page, file).await?;
     let curr_position = file.stream_position().await?;
     file.seek(SeekFrom::Current(
         (page_count * PAGE_SIZE as i64) - curr_position as i64,
@@ -64,10 +60,52 @@ where
     Ok(())
 }
 
+async fn persist_page_in_place<'a, T>(
+    page: &'a mut GeneralPage<T>,
+    file: &'a mut File,
+) -> eyre::Result<()>
+where
+    T: Persistable + Send + Sync,
+{
+    let inner_bytes = page.inner.as_bytes();
+    page.header.data_length = inner_bytes.as_ref().len() as u32;
+    file.write_all(page.header.as_bytes().as_ref()).await?;
+    file.write_all(inner_bytes.as_ref()).await?;
+    Ok(())
+}
+
+pub async fn persist_pages_batch<T>(pages: Vec<GeneralPage<T>>, file: &mut File) -> eyre::Result<()>
+where
+    T: Persistable + Send + Sync,
+{
+    let mut iter = pages.into_iter();
+    if let Some(mut page) = iter.next() {
+        seek_to_page_start(file, page.header.page_id.0).await?;
+        persist_page_in_place(&mut page, file).await?;
+
+        for mut page in iter {
+            seek_to_page_start_relatively(file, page.header.page_id.0).await?;
+            persist_page_in_place(&mut page, file).await?;
+        }
+
+        Ok(())
+    } else {
+        Ok(())
+    }
+}
+
 pub async fn seek_to_page_start(file: &mut File, index: u32) -> eyre::Result<()> {
     file.seek(SeekFrom::Start(index as u64 * PAGE_SIZE as u64))
         .await?;
+    Ok(())
+}
 
+async fn seek_to_page_start_relatively(file: &mut File, index: u32) -> eyre::Result<()> {
+    let curr_position = file.stream_position().await?;
+    file.seek(SeekFrom::Current(
+        (index * PAGE_SIZE as u32) as i64 - curr_position as i64,
+    ))
+    .await?;
     Ok(())
 }
 
@@ -118,7 +156,7 @@ pub async fn parse_general_header(file: &mut File) -> eyre::Result<GeneralHeader
     Ok(header)
 }
 
-pub async fn parse_page<Page, const PAGE_SIZE: u32>(
+pub async fn parse_page<Page, const INNER_PAGE_SIZE: u32>(
     file: &mut File,
     index: u32,
 ) -> eyre::Result<GeneralPage<Page>>
@@ -128,9 +166,20 @@ where
         rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
 {
     seek_to_page_start(file, index).await?;
+    parse_page_in_place::<Page, INNER_PAGE_SIZE>(file).await
+}
+
+async fn parse_page_in_place<Page, const INNER_PAGE_SIZE: u32>(
+    file: &mut File,
+) -> eyre::Result<GeneralPage<Page>>
+where
+    Page: rkyv::Archive + Persistable,
+    <Page as rkyv::Archive>::Archived:
+        rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
+{
     let header = parse_general_header(file).await?;
     let length = if header.data_length == 0 {
-        PAGE_SIZE
+        INNER_PAGE_SIZE
     } else {
         header.data_length
     };
@@ -145,6 +194,34 @@ where
     })
 }
 
+pub async fn parse_pages_batch<Page, const PAGE_SIZE: u32>(
+    file: &mut File,
+    indexes: Vec<u32>,
+) -> eyre::Result<Vec<GeneralPage<Page>>>
+where
+    Page: rkyv::Archive + Persistable,
+    <Page as rkyv::Archive>::Archived:
+        rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
+{
+    let mut iter = indexes.into_iter();
+    if let Some(index) = iter.next() {
+        let mut pages = vec![];
+        seek_to_page_start(file, index).await?;
+        let page = parse_page_in_place::<Page, PAGE_SIZE>(file).await?;
+        pages.push(page);
+
+        for index in iter {
+            seek_to_page_start_relatively(file, index).await?;
+            let page = parse_page_in_place::<Page, PAGE_SIZE>(file).await?;
+            pages.push(page);
+        }
+
+        Ok(pages)
+    } else {
+        Ok(vec![])
+    }
+}
+
 pub async fn parse_general_header_by_index(
     file: &mut File,
     index: u32,
@@ -155,11 +232,17 @@ pub async fn parse_general_header_by_index(
     Ok(header)
 }
 
-pub async fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usize>(
+pub async fn parse_data_page<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
     file: &mut File,
     index: u32,
 ) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     seek_to_page_start(file, index).await?;
+    parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await
+}
+
+async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
+    file: &mut File,
+) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     let header = parse_general_header(file).await?;
 
     let mut buffer = [0u8; INNER_PAGE_SIZE];
@@ -179,6 +262,29 @@ pub async fn parse_data_page<const PAGE_SIZE: usize, const INNER_PAGE_SIZE: usiz
         header,
         inner: data,
     })
+}
+
+pub async fn parse_data_pages_batch<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
+    file: &mut File,
+    indexes: Vec<u32>,
+) -> eyre::Result<Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>>> {
+    let mut iter = indexes.into_iter();
+    if let Some(index) = iter.next() {
+        let mut pages = vec![];
+        seek_to_page_start(file, index).await?;
+        let page = parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await?;
+        pages.push(page);
+
+        for index in iter {
+            seek_to_page_start_relatively(file, index).await?;
+            let page = parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await?;
+            pages.push(page);
+        }
+
+        Ok(pages)
+    } else {
+        Ok(vec![])
+    }
 }
 
 // pub fn parse_data_record<const PAGE_SIZE: usize>(

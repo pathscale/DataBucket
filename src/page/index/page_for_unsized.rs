@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::io::SeekFrom;
+
 use data_bucket_codegen::Persistable;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -7,7 +10,6 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -24,7 +26,7 @@ pub struct UnsizedIndexPage<
 > {
     pub slots_size: u16,
     pub node_id_size: u16,
-    pub node_id: T,
+    pub node_id: IndexValue<T>,
     pub last_value_offset: u32,
     pub slots: Vec<(u32, u16)>,
     pub index_values: Vec<IndexValue<T>>,
@@ -37,13 +39,13 @@ pub struct UnsizedIndexPage<
 pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable + VariableSizeMeasurable> {
     pub slots_size: u16,
     pub node_id_size: u16,
-    pub node_id: T,
+    pub node_id: IndexValue<T>,
     pub last_value_offset: u32,
     pub slots: Vec<(u32, u16)>,
 }
 
 impl<T: Default + SizeMeasurable + VariableSizeMeasurable> UnsizedIndexPageUtility<T> {
-    pub fn update_node_id(&mut self, node_id: T) -> eyre::Result<()> {
+    pub fn update_node_id(&mut self, node_id: IndexValue<T>) -> eyre::Result<()> {
         self.node_id_size = node_id.aligned_size() as u16;
         self.node_id = node_id;
 
@@ -55,6 +57,7 @@ impl<T: Default + SizeMeasurable + VariableSizeMeasurable, const DATA_LENGTH: u3
     IndexPageUtility<T> for UnsizedIndexPage<T, DATA_LENGTH>
 where
     T: Archive
+        + Debug
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         > + Send
@@ -111,6 +114,7 @@ impl<T, const DATA_LENGTH: u32> UnsizedIndexPage<T, DATA_LENGTH>
 where
     T: Archive
         + Default
+        + Clone
         + SizeMeasurable
         + VariableSizeMeasurable
         + for<'a> Serialize<
@@ -118,15 +122,15 @@ where
         >,
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
-    pub fn new(node_id: T, value: IndexValue<T>) -> eyre::Result<Self> {
-        let len = value.aligned_size() as u32;
+    pub fn new(node_id: IndexValue<T>) -> eyre::Result<Self> {
+        let len = node_id.aligned_size() as u32;
         Ok(Self {
             slots_size: 1,
-            node_id_size: node_id.aligned_size() as u16,
-            node_id,
+            node_id_size: len as u16,
+            node_id: node_id.clone(),
             last_value_offset: len,
             slots: vec![(len, len as u16)],
-            index_values: vec![value],
+            index_values: vec![node_id],
         })
     }
 
@@ -135,7 +139,7 @@ where
         T: Clone,
     {
         let slots_size = values.len() as u16;
-        let node_id = values.last().expect("Node should be not empty").key.clone();
+        let node_id = values.last().expect("Node should be not empty").clone();
         let node_id_size = node_id.aligned_size() as u16;
         let mut last_value_offset = 0;
         let mut slots = vec![];
@@ -158,7 +162,7 @@ where
     where
         T: Clone,
     {
-        self.node_id = self.index_values.last().unwrap().key.clone();
+        self.node_id = self.index_values.last().unwrap().clone();
         self.node_id_size = self.node_id.aligned_size() as u16;
         self.last_value_offset = 0;
         let mut slots = vec![];
@@ -261,6 +265,7 @@ where
     T: Archive
         + Clone
         + Default
+        + Debug
         + SizeMeasurable
         + VariableSizeMeasurable
         + for<'a> Serialize<
@@ -341,16 +346,11 @@ mod test {
 
     #[test]
     fn to_bytes_and_back() {
-        let value = IndexValue {
+        let page = UnsizedIndexPage::<_, 1024>::new(IndexValue {
             key: "Someone from somewhere".to_string(),
-            link: Link {
-                page_id: 0.into(),
-                offset: 0,
-                length: 40,
-            },
-        };
-        let page =
-            UnsizedIndexPage::<_, 1024>::new("Someone from somewhere".to_string(), value).unwrap();
+            link: Default::default(),
+        })
+        .unwrap();
         let bytes = page.as_bytes();
         assert_eq!(bytes.as_ref().len(), 1024);
         let page_back = UnsizedIndexPage::from_bytes(bytes.as_ref());
