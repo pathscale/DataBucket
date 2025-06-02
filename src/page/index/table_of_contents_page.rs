@@ -1,4 +1,3 @@
-use data_bucket_codegen::Persistable;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -167,10 +166,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::page::PageId;
     use crate::{Link, Persistable, TableOfContentsPage};
-    use rkyv::to_bytes;
-    use std::collections::BTreeMap;
 
     #[test]
     fn test_sizes() {
