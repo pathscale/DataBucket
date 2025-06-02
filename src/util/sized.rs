@@ -97,7 +97,31 @@ where
     T2: SizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
+        if let Some(align) = T1::align() {
+            if align % 8 == 0 {
+                return align8(self.0.aligned_size() + self.1.aligned_size());
+            }
+        }
+        if let Some(align) = T2::align() {
+            if align % 8 == 0 {
+                return align8(self.0.aligned_size() + self.1.aligned_size());
+            }
+        }
         align(self.0.aligned_size() + self.1.aligned_size())
+    }
+
+    fn align() -> Option<usize> {
+        if let Some(align) = T1::align() {
+            if align % 8 == 0 {
+                return Some(8);
+            }
+        }
+        if let Some(align) = T2::align() {
+            if align % 8 == 0 {
+                return Some(8);
+            }
+        }
+        None
     }
 }
 
@@ -207,7 +231,27 @@ where
 #[cfg(test)]
 mod test {
     use crate::util::sized::SizeMeasurable;
-    use crate::IndexValue;
+    use crate::{IndexValue, Link};
+    use rkyv::to_bytes;
+
+    #[test]
+    fn test_tuple() {
+        let t = (u64::MAX, Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let t = (u32::MAX, Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let t = (u8::MAX, Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        )
+    }
 
     #[test]
     fn test_string() {
