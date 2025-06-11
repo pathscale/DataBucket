@@ -146,16 +146,14 @@ where
             2
         } else if val_size == 4 {
             4
-        } else {
-            if let Some(al) = T::align() {
-                if al % 8 == 0 {
-                    align8(val_size)
-                } else {
-                    val_size
-                }
+        } else if let Some(al) = T::align() {
+            if al % 8 == 0 {
+                align8(val_size)
             } else {
                 val_size
             }
+        } else {
+            val_size
         };
 
         align(self.len() * vec_content_size) + 8
