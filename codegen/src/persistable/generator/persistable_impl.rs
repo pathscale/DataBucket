@@ -1,6 +1,6 @@
 use crate::persistable::generator::Generator;
 
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 use syn::{Field, GenericParam, Type};
@@ -268,13 +268,15 @@ impl Generator {
             });
             val.unwrap().1.ident.as_ref().unwrap()
         };
+        let value_fn_ident =
+            Ident::new(format!("{}_value_size", ident).as_str(), Span::call_site());
         let len = if is_primitive(&inner_ty_str) {
             quote! {
                 let values_len = align(#size_ident as usize * <#inner_ty as Default>::default().aligned_size()) + 8;
             }
         } else {
             quote! {
-                let values_len = #size_ident as usize * align8(<#inner_ty as Default>::default().aligned_size()) + 8;
+                let values_len = #size_ident as usize * Self::#value_fn_ident() + 8;
             }
         };
         quote! {

@@ -3,7 +3,7 @@ members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
@@ -11,7 +11,7 @@ repository = "https://github.com/pathscale/DataBucket"
 description = "DataBucket is container for WorkTable's data"
 
 [dependencies]
-data_bucket_derive = { path = "codegen", version = "0.2.4" }
+data_bucket_derive = { path = "codegen", version = "0.2.6" }
 
 eyre = "0.6.12"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }

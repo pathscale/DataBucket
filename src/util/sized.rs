@@ -146,8 +146,14 @@ where
             2
         } else if val_size == 4 {
             4
+        } else if let Some(al) = T::align() {
+            if al % 8 == 0 {
+                align8(val_size)
+            } else {
+                val_size
+            }
         } else {
-            align8(val_size)
+            val_size
         };
 
         align(self.len() * vec_content_size) + 8
@@ -233,6 +239,48 @@ mod test {
     use crate::util::sized::SizeMeasurable;
     use crate::{IndexValue, Link};
     use rkyv::to_bytes;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_uuid() {
+        let u = Uuid::new_v4();
+        assert_eq!(
+            u.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&u).unwrap().len()
+        );
+        let t = (Uuid::new_v4(), Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let v = IndexValue {
+            key: u,
+            link: Default::default(),
+        };
+        assert_eq!(
+            v.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&v).unwrap().len()
+        );
+        let mut vec = Vec::new();
+        vec.push(IndexValue {
+            key: Uuid::new_v4(),
+            link: Default::default(),
+        });
+        assert_eq!(
+            vec.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&vec).unwrap().len()
+        );
+        for _ in 0..600 {
+            vec.push(IndexValue {
+                key: Uuid::new_v4(),
+                link: Default::default(),
+            })
+        }
+        assert_eq!(
+            vec.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&vec).unwrap().len()
+        )
+    }
 
     #[test]
     fn test_tuple() {

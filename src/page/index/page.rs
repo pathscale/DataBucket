@@ -301,6 +301,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
 mod tests {
     use crate::page::IndexValue;
     use crate::{get_index_page_size_from_data_length, IndexPage, Persistable, INNER_PAGE_SIZE};
+    use uuid::Uuid;
 
     #[test]
     fn test_bytes() {
@@ -314,6 +315,47 @@ mod tests {
         );
         let bytes = page.as_bytes();
         let new_page = IndexPage::<u64>::from_bytes(bytes.as_ref());
+
+        assert_eq!(new_page.node_id, page.node_id);
+        assert_eq!(new_page.current_index, page.current_index);
+        assert_eq!(new_page.size, page.size);
+        assert_eq!(new_page.slots, page.slots);
+        assert_eq!(new_page.index_values, page.index_values);
+    }
+
+    #[test]
+    fn test_bytes_128() {
+        let size: usize = get_index_page_size_from_data_length::<u128>(INNER_PAGE_SIZE);
+        println!("size: {}", size);
+        let page = IndexPage::<u128>::new(
+            IndexValue {
+                key: u128::default(),
+                link: Default::default(),
+            },
+            size,
+        );
+        let bytes = page.as_bytes();
+        let new_page = IndexPage::<u128>::from_bytes(bytes.as_ref());
+
+        assert_eq!(new_page.node_id, page.node_id);
+        assert_eq!(new_page.current_index, page.current_index);
+        assert_eq!(new_page.size, page.size);
+        assert_eq!(new_page.slots, page.slots);
+        assert_eq!(new_page.index_values, page.index_values);
+    }
+
+    #[test]
+    fn test_bytes_uuid() {
+        let size: usize = get_index_page_size_from_data_length::<Uuid>(INNER_PAGE_SIZE);
+        let page = IndexPage::<Uuid>::new(
+            IndexValue {
+                key: Uuid::new_v4(),
+                link: Default::default(),
+            },
+            size,
+        );
+        let bytes = page.as_bytes();
+        let new_page = IndexPage::<Uuid>::from_bytes(bytes.as_ref());
 
         assert_eq!(new_page.node_id, page.node_id);
         assert_eq!(new_page.current_index, page.current_index);
