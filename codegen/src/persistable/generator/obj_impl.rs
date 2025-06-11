@@ -222,7 +222,7 @@ impl Generator {
             }
         } else {
             quote! {
-                 length * align8(<#inner_ty as Default>::default().aligned_size()) + 8
+                 length * Self::#value_fn_ident() + 8
             }
         };
         let len_value = if is_primitive(&inner_ty_str) {
@@ -231,7 +231,11 @@ impl Generator {
             }
         } else {
             quote! {
-                align8(<#inner_ty as Default>::default().aligned_size())
+                if <#inner_ty as SizeMeasurable>::align() == Some(8) {
+                    align8(<#inner_ty as Default>::default().aligned_size())
+                } else {
+                    <#inner_ty as Default>::default().aligned_size()
+                }
             }
         };
         quote! {
