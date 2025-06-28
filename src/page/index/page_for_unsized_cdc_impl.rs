@@ -48,7 +48,10 @@ where
                 value,
                 index,
             } => {
-                if value == max_value {
+                // we are checking if index is non-zero because for non-unique indexes this is possible and will
+                // lead to panic, but in this case new node_id will be same to current node_id so it's change
+                // will not affect at all.
+                if value == max_value && index != 0 {
                     let new_node_id = self
                         .index_values
                         .get(index - 1)
