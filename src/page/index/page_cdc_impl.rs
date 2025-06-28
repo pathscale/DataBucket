@@ -100,7 +100,7 @@ where
     }
 
     fn apply_remove_at(&mut self, index: usize) -> eyre::Result<()> {
-        // For remove we first remove slot entry for  index value
+        // For remove we first remove slot entry for index value
         let value_position = self.slots.remove(index);
         // We push 0 in the tail because slots size should be fixed.
         self.slots.push(0);
