@@ -21,5 +21,5 @@ uuid = { version = "1.11.0", features = ["v4"] }
 ordered-float = "5.0.0"
 # indexset = { version = "0.12.3", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { path = "../indexset", version = "0.12.3", features = ["concurrent", "cdc", "multimap"] }
-indexset = { git = "https://github.com/Handy-caT/indexset", rev = "b96a832", version = "0.12.3", features = ["concurrent", "cdc", "multimap"] }
+indexset = { package = "wt-indexset", version = "0.12.4", features = ["concurrent", "cdc", "multimap"] }
 tokio = { version = "1", features = ["full"] }
