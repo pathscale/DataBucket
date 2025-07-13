@@ -35,6 +35,7 @@ where
     pub fn apply_change_event(&mut self, event: ChangeEvent<Pair<T, Link>>) -> eyre::Result<()> {
         match event.clone() {
             ChangeEvent::InsertAt {
+                event_id: _,
                 max_value: _,
                 value,
                 index,
@@ -42,13 +43,14 @@ where
                 if value.key > self.node_id.key {
                     self.node_id = value.clone().into();
                 }
-                if index == self.current_length as usize {
+                if index == self.current_length as usize && value.key == self.node_id.key {
                     self.node_id = value.clone().into();
                 }
                 self.apply_insert_at(index, value)?;
                 Ok(())
             }
             ChangeEvent::RemoveAt {
+                event_id: _,
                 max_value,
                 value,
                 index,
@@ -129,6 +131,7 @@ mod test {
             10,
         );
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -161,6 +164,7 @@ mod test {
             10,
         );
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -173,6 +177,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -212,6 +217,7 @@ mod test {
             10,
         );
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -224,6 +230,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -236,6 +243,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::RemoveAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 2,
                 value: Link::default(),
@@ -269,6 +277,7 @@ mod test {
             10,
         );
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -281,6 +290,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 1,
                 value: Link::default(),
@@ -293,6 +303,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::RemoveAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: 2,
                 value: Link::default(),

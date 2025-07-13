@@ -362,7 +362,7 @@ mod test {
         let mut values = vec![];
         for i in 0..10 {
             values.push(IndexValue {
-                key: format!("{}___________________{}", i, i),
+                key: format!("{i}___________________{i}"),
                 link: Link {
                     page_id: 0.into(),
                     offset: i * 24,
