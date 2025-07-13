@@ -28,6 +28,7 @@ where
     pub fn apply_change_event(&mut self, event: ChangeEvent<Pair<T, Link>>) -> eyre::Result<()> {
         match event {
             ChangeEvent::InsertAt {
+                event_id: _,
                 max_value: _,
                 value,
                 index,
@@ -44,6 +45,7 @@ where
                 Ok(())
             }
             ChangeEvent::RemoveAt {
+                event_id: _,
                 max_value,
                 value,
                 index,
@@ -115,6 +117,7 @@ mod test {
         })
         .unwrap();
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: "Something".to_string(),
                 value: Link::default(),
@@ -138,6 +141,7 @@ mod test {
         })
         .unwrap();
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: "Something".to_string(),
                 value: Link::default(),
@@ -150,6 +154,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::RemoveAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: "Something new".to_string(),
                 value: Link::default(),
@@ -173,6 +178,7 @@ mod test {
         })
         .unwrap();
         let event = ChangeEvent::InsertAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: "Something".to_string(),
                 value: Link::default(),
@@ -185,6 +191,7 @@ mod test {
         };
         page.apply_change_event(event).unwrap();
         let event = ChangeEvent::RemoveAt {
+            event_id: 0.into(),
             max_value: Pair {
                 key: "Something new".to_string(),
                 value: Link::default(),
