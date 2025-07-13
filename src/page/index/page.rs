@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_bytes_128() {
         let size: usize = get_index_page_size_from_data_length::<u128>(INNER_PAGE_SIZE);
-        println!("size: {}", size);
+        println!("size: {size}");
         let page = IndexPage::<u128>::new(
             IndexValue {
                 key: u128::default(),

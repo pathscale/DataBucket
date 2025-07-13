@@ -268,8 +268,7 @@ impl Generator {
             });
             val.unwrap().1.ident.as_ref().unwrap()
         };
-        let value_fn_ident =
-            Ident::new(format!("{}_value_size", ident).as_str(), Span::call_site());
+        let value_fn_ident = Ident::new(format!("{ident}_value_size").as_str(), Span::call_site());
         let len = if is_primitive(&inner_ty_str) {
             quote! {
                 let values_len = align(#size_ident as usize * <#inner_ty as Default>::default().aligned_size()) + 8;
