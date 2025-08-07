@@ -3,7 +3,7 @@ members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
-version = "0.2.10"
+version = "0.3.0"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
