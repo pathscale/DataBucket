@@ -28,6 +28,7 @@ pub struct UnsizedIndexPage<
     pub node_id_size: u16,
     pub node_id: IndexValue<T>,
     pub last_value_offset: u32,
+    pub removed_len: u32,
     pub slots: Vec<(u32, u16)>,
     pub index_values: Vec<IndexValue<T>>,
 }
@@ -41,6 +42,7 @@ pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable + VariableSizeMea
     pub node_id_size: u16,
     pub node_id: IndexValue<T>,
     pub last_value_offset: u32,
+    pub removed_len: u32,
     pub slots: Vec<(u32, u16)>,
 }
 
@@ -129,6 +131,7 @@ where
             node_id_size: len as u16,
             node_id: node_id.clone(),
             last_value_offset: len,
+            removed_len: 0,
             slots: vec![(len, len as u16)],
             index_values: vec![node_id],
         })
@@ -154,17 +157,19 @@ where
             node_id,
             last_value_offset,
             slots,
+            removed_len: 0,
             index_values: values,
         }
     }
 
-    fn rebuild(&mut self)
+    pub fn rebuild(&mut self)
     where
         T: Clone,
     {
         self.node_id = self.index_values.last().unwrap().clone();
         self.node_id_size = self.node_id.aligned_size() as u16;
         self.last_value_offset = 0;
+        self.removed_len = 0;
         let mut slots = vec![];
         for val in &self.index_values {
             let len = val.aligned_size() as u32;
@@ -280,6 +285,7 @@ where
             node_id_size: self.node_id_size,
             node_id: self.node_id.clone(),
             last_value_offset: self.last_value_offset,
+            removed_len: self.removed_len,
             slots: self.slots.clone(),
         };
         let utility_bytes = utility.as_bytes();
@@ -335,6 +341,7 @@ where
             node_id: utility.node_id,
             last_value_offset: utility.last_value_offset,
             slots: utility.slots,
+            removed_len: utility.removed_len,
             index_values,
         }
     }

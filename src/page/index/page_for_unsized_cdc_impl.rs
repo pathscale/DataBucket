@@ -9,7 +9,10 @@ use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::{IndexValue, Link, SizeMeasurable, UnsizedIndexPage, VariableSizeMeasurable};
+use crate::{
+    IndexValue, Link, SizeMeasurable, UnsizedIndexPage, UnsizedIndexPageUtility,
+    VariableSizeMeasurable,
+};
 
 impl<T, const DATA_LENGTH: u32> UnsizedIndexPage<T, DATA_LENGTH>
 where
@@ -98,7 +101,14 @@ where
     fn apply_remove_at(&mut self, index: usize) -> eyre::Result<()> {
         self.slots.remove(index);
         self.slots_size -= 1;
-        self.index_values.remove(index);
+        let v = self.index_values.remove(index);
+
+        self.removed_len +=
+            (v.aligned_size() + UnsizedIndexPageUtility::<T>::slots_value_size()) as u32;
+
+        if self.removed_len > DATA_LENGTH / 2 {
+            self.rebuild();
+        }
         Ok(())
     }
 }
