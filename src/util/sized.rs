@@ -58,6 +58,23 @@ macro_rules! size_measurable_for_sized {
 
 size_measurable_for_sized! {u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, bool}
 
+macro_rules! size_measurable_for_arrays {
+    ($($t:ident),+) => {
+        $(
+            impl<const N: usize> SizeMeasurable for [$t; N] {
+                fn aligned_size(&self) -> usize {
+                    mem::size_of::<[$t; N]>()
+                }
+                fn align() -> Option<usize> {
+                    Some(align(mem::size_of::<[$t; N]>()))
+                }
+            }
+        )+
+    };
+}
+
+size_measurable_for_arrays! {u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, bool}
+
 impl SizeMeasurable for Link {
     fn aligned_size(&self) -> usize {
         LINK_LENGTH
@@ -76,18 +93,6 @@ where
 {
     fn aligned_size(&self) -> usize {
         self.0.aligned_size()
-    }
-}
-
-impl SizeMeasurable for [u8; 32] {
-    fn aligned_size(&self) -> usize {
-        mem::size_of::<[u8; 32]>()
-    }
-}
-
-impl SizeMeasurable for [u8; 20] {
-    fn aligned_size(&self) -> usize {
-        mem::size_of::<[u8; 20]>()
     }
 }
 
