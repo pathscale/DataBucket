@@ -20,12 +20,13 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use crate::page::index::IndexPageUtility;
 use crate::page::{IndexValue, PageId};
 use crate::{
-    align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE,
+    align, align8, seek_to_page_start, DefaultSizeMeasurable, Link, Persistable, SizeMeasurable,
+    GENERAL_HEADER_SIZE,
 };
 
 pub fn get_index_page_size_from_data_length<T>(length: usize) -> usize
 where
-    T: Default + SizeMeasurable,
+    T: DefaultSizeMeasurable,
 {
     let size_field_size = IndexPage::<T>::size_size();
     let node_id_size = IndexPage::<T>::node_id_size();
@@ -51,7 +52,7 @@ where
     Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Persistable,
 )]
 #[persistable(by_parts)]
-pub struct IndexPage<T: Default + SizeMeasurable> {
+pub struct IndexPage<T: DefaultSizeMeasurable> {
     pub size: u16,
     pub node_id: IndexValue<T>,
     pub current_index: u16,
@@ -64,7 +65,7 @@ pub struct IndexPage<T: Default + SizeMeasurable> {
     Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Persistable,
 )]
 #[persistable(by_parts)]
-pub struct SizedIndexPageUtility<T: Default + SizeMeasurable> {
+pub struct SizedIndexPageUtility<T: DefaultSizeMeasurable> {
     pub size: u16,
     pub node_id: IndexValue<T>,
     pub current_index: u16,
@@ -72,7 +73,7 @@ pub struct SizedIndexPageUtility<T: Default + SizeMeasurable> {
     pub slots: Vec<u16>,
 }
 
-impl<T: Default + SizeMeasurable> IndexPageUtility<T> for IndexPage<T>
+impl<T: DefaultSizeMeasurable> IndexPageUtility<T> for IndexPage<T>
 where
     T: Archive
         + for<'a> Serialize<
@@ -114,7 +115,7 @@ where
     }
 }
 
-impl<T: Default + SizeMeasurable> IndexPage<T> {
+impl<T: DefaultSizeMeasurable> IndexPage<T> {
     pub fn new(node_id: IndexValue<T>, size: usize) -> Self
     where
         T: Clone,
@@ -189,7 +190,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
 
     fn get_value_offset(size: usize, value_index: usize) -> usize
     where
-        T: Default + SizeMeasurable,
+        T: DefaultSizeMeasurable,
     {
         let mut offset = GENERAL_HEADER_SIZE;
         offset += IndexPage::<T>::size_size();

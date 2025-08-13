@@ -212,7 +212,7 @@ impl Generator {
             let size_type = &f.ty;
             let size_ident = f.ident.as_ref().unwrap();
             quote! {
-                let size_length = <#size_type as Default>::default().aligned_size();
+                let size_length = <#size_type as DefaultSizeMeasurable>::default_aligned_size();
                 let archived =
                     unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[offset..offset + size_length]) };
                 let #size_ident =
@@ -237,7 +237,7 @@ impl Generator {
 
     fn gen_from_bytes_for_primitive(&self, ty: &Type, ident: &Ident) -> TokenStream {
         quote! {
-            let length = <#ty as Default>::default().aligned_size();
+            let length = <#ty as DefaultSizeMeasurable>::default_aligned_size();
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + length]);
             let archived = unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
@@ -271,7 +271,7 @@ impl Generator {
         let value_fn_ident = Ident::new(format!("{ident}_value_size").as_str(), Span::call_site());
         let len = if is_primitive(&inner_ty_str) {
             quote! {
-                let values_len = align(#size_ident as usize * <#inner_ty as Default>::default().aligned_size()) + 8;
+                let values_len = align(#size_ident as usize * <#inner_ty as DefaultSizeMeasurable>::default_aligned_size()) + 8;
             }
         } else {
             quote! {

@@ -25,6 +25,22 @@ pub struct Link {
     pub length: u32,
 }
 
+impl Link {
+    /// Unites two [`Link`]'s into one if they have same border. If [`Link`]'s
+    /// could not be united, `None` returned.
+    pub fn unite(self, other: Link) -> Option<Link> {
+        if self.offset + self.length != other.offset || self.page_id != other.page_id {
+            None
+        } else {
+            Some(Link {
+                page_id: self.page_id,
+                offset: self.offset,
+                length: self.length + other.length,
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::link::Link;

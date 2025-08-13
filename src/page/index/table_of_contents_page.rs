@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::page::PageId;
-use crate::{align, Persistable, SizeMeasurable};
+use crate::{align, DefaultSizeMeasurable, Persistable, SizeMeasurable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Serialize)]
 pub struct TableOfContentsPage<T: Ord + Eq> {
@@ -21,7 +21,7 @@ where
         Self {
             records: BTreeMap::new(),
             empty_pages: vec![],
-            estimated_size: usize::default().aligned_size() + 12,
+            estimated_size: usize::default_aligned_size() + 12,
         }
     }
 }
