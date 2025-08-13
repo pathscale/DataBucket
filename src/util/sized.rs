@@ -41,6 +41,22 @@ pub trait SizeMeasurable {
     }
 }
 
+/// Similar to [`SizeMeasurable`] and automatically derived for [`Default`] types
+/// that implement [`SizeMeasurable`] and allows to get size of default value
+/// which is useful for sized types like `u32` and etc.
+pub trait DefaultSizeMeasurable: Default + SizeMeasurable {
+    fn default_aligned_size() -> usize;
+}
+
+impl<T> DefaultSizeMeasurable for T
+where
+    T: Default + SizeMeasurable,
+{
+    fn default_aligned_size() -> usize {
+        T::default().aligned_size()
+    }
+}
+
 macro_rules! size_measurable_for_sized {
     ($($t:ident),+) => {
         $(
@@ -143,10 +159,10 @@ impl SizeMeasurable for String {
 
 impl<T> SizeMeasurable for Vec<T>
 where
-    T: SizeMeasurable + Default,
+    T: DefaultSizeMeasurable + SizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
-        let val_size = T::default().aligned_size();
+        let val_size = T::default_aligned_size();
         let vec_content_size = if val_size == 2 {
             2
         } else if val_size == 4 {
@@ -227,7 +243,7 @@ where
     K: VariableSizeMeasurable,
 {
     fn aligned_size(length: usize) -> usize {
-        align(Link::default().aligned_size() + K::aligned_size(length))
+        align(Link::default_aligned_size() + K::aligned_size(length))
     }
 }
 impl<K> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, Link>
@@ -235,7 +251,7 @@ where
     K: VariableSizeMeasurable,
 {
     fn aligned_size(length: usize) -> usize {
-        align(Link::default().aligned_size() + K::aligned_size(length))
+        align(Link::default_aligned_size() + K::aligned_size(length))
     }
 }
 
@@ -243,7 +259,6 @@ where
 mod test {
     use crate::util::sized::SizeMeasurable;
     use crate::{IndexValue, Link};
-    use rkyv::to_bytes;
     use uuid::Uuid;
 
     #[test]
@@ -292,17 +307,17 @@ mod test {
         let t = (u64::MAX, Link::default());
         assert_eq!(
             t.aligned_size(),
-            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+            rkyv::to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
         );
         let t = (u32::MAX, Link::default());
         assert_eq!(
             t.aligned_size(),
-            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+            rkyv::to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
         );
         let t = (u8::MAX, Link::default());
         assert_eq!(
             t.aligned_size(),
-            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+            rkyv::to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
         )
     }
 
