@@ -3,7 +3,7 @@ members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
@@ -21,5 +21,5 @@ uuid = { version = "1.11.0", features = ["v4"] }
 ordered-float = "5.0.0"
 # indexset = { version = "0.12.3", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", path = "../indexset", version = "0.12.5", features = ["concurrent", "cdc", "multimap"] }
-indexset = { package = "wt-indexset", version = "0.12.6", features = ["concurrent", "cdc", "multimap"] }
+indexset = { package = "wt-indexset", version = "0.12.7", features = ["concurrent", "cdc", "multimap"] }
 tokio = { version = "1", features = ["full"] }
