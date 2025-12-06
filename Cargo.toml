@@ -16,7 +16,7 @@ data_bucket_derive = { path = "codegen", version = "0.2.6" }
 eyre = "0.6.12"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
 rkyv = { version = "0.8.9", features = ["uuid-1"] }
-lockfree = "0.5.1"
+lock_freedom = "0.1"
 uuid = { version = "1.11.0", features = ["v4"] }
 ordered-float = "5.0.0"
 # indexset = { version = "0.12.3", features = ["concurrent", "cdc", "multimap"] }
