@@ -15,7 +15,7 @@ pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
         }
         accum
     };
-    if data_length % 4 != 0 {
+    if !data_length.is_multiple_of(4) {
         data_length += 4 - data_length % 4;
     }
 
@@ -116,7 +116,7 @@ mod test {
         .unwrap();
         let parsed = parse_archived_row(
             &buffer,
-            &vec![
+            &[
                 ("string1".to_string(), "String".to_string()),
                 ("int1".to_string(), "i32".to_string()),
                 ("string2".to_string(), "String".to_string()),
