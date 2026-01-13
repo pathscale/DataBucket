@@ -5,7 +5,7 @@ use std::{mem, sync::Arc};
 use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
-    if len % 4 == 0 {
+    if len.is_multiple_of(4) {
         len
     } else {
         (len / 4 + 1) * 4
@@ -13,7 +13,7 @@ pub const fn align(len: usize) -> usize {
 }
 
 pub const fn align8(len: usize) -> usize {
-    if len % 8 == 0 {
+    if len.is_multiple_of(8) {
         len
     } else {
         (len / 8 + 1) * 8
