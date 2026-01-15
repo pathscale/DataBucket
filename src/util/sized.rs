@@ -176,6 +176,10 @@ impl<T: SizeMeasurable> SizeMeasurable for Option<T>
 where
     T: SizeMeasurable,
 {
+    fn align() -> Option<usize> {
+        T::align()
+    }
+
     fn aligned_size(&self) -> usize {
         size_of::<Option<T>>()
     }
@@ -298,7 +302,20 @@ mod test {
         assert_eq!(
             t.aligned_size(),
             to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let t = (Some(0.0f64), Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
         )
+    }
+    #[test]
+    fn test_option() {
+        let t = Some(0.0f64);
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
     }
 
     #[test]
