@@ -221,20 +221,22 @@ impl VariableSizeMeasurable for String {
     }
 }
 
-impl<K> VariableSizeMeasurable for indexset::core::pair::Pair<K, Link>
+impl<K, L> VariableSizeMeasurable for indexset::core::pair::Pair<K, L>
 where
     K: VariableSizeMeasurable,
+    L: SizeMeasurable + Default,
 {
     fn aligned_size(length: usize) -> usize {
-        align(Link::default().aligned_size() + K::aligned_size(length))
+        align(L::default().aligned_size() + K::aligned_size(length))
     }
 }
-impl<K> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, Link>
+impl<K, L> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, L>
 where
     K: VariableSizeMeasurable,
+    L: SizeMeasurable + Default,
 {
     fn aligned_size(length: usize) -> usize {
-        align(Link::default().aligned_size() + K::aligned_size(length))
+        align(L::default().aligned_size() + K::aligned_size(length))
     }
 }
 
