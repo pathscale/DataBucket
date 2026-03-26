@@ -20,6 +20,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: "true"
+        add-job-id-key: "false"
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -29,9 +33,13 @@ jobs:
   clippy_check:
 
     runs-on: ubicloud-standard-2
-    
+
     steps:
       - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: "true"
+          add-job-id-key: "false"
       - uses: actions-rs/toolchain@v1
         with:
             toolchain: stable
