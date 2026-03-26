@@ -16,7 +16,7 @@ env:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
 
     steps:
     - uses: actions/checkout@v3
@@ -28,7 +28,7 @@ jobs:
 
   clippy_check:
 
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     
     steps:
       - uses: actions/checkout@v3
