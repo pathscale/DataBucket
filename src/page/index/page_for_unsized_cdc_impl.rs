@@ -56,7 +56,7 @@ where
                 // we are checking if index is non-zero because for non-unique indexes this is possible and will
                 // lead to panic, but in this case new node_id will be same to current node_id so it's change
                 // will not affect at all.
-                if value == max_value && index != 0 {
+                if value == max_value && index != 0 && index == self.slots_size as usize - 1 {
                     let new_node_id = self
                         .index_values
                         .get(index - 1)
