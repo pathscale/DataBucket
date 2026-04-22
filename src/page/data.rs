@@ -56,7 +56,7 @@ impl<const DATA_LENGTH: usize> Persistable for DataPage<DATA_LENGTH> {
         &self.data[..self.length as usize]
     }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         let mut data = [0; DATA_LENGTH];
         data.copy_from_slice(bytes);
         Self {

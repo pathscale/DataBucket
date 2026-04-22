@@ -108,7 +108,7 @@ where
         .await?;
         let mut index_utility_bytes = vec![0u8; index_utility_len];
         file.read_exact(index_utility_bytes.as_mut_slice()).await?;
-        let utility = SizedIndexPageUtility::<T>::from_bytes(&index_utility_bytes);
+        let utility = SizedIndexPageUtility::<T>::from_bytes(&index_utility_bytes, 0);
 
         Ok(utility)
     }
@@ -314,7 +314,7 @@ mod tests {
             size,
         );
         let bytes = page.as_bytes();
-        let new_page = IndexPage::<u64>::from_bytes(bytes.as_ref());
+        let new_page = IndexPage::<u64>::from_bytes(bytes.as_ref(), 0);
 
         assert_eq!(new_page.node_id, page.node_id);
         assert_eq!(new_page.current_index, page.current_index);
@@ -335,7 +335,7 @@ mod tests {
             size,
         );
         let bytes = page.as_bytes();
-        let new_page = IndexPage::<u128>::from_bytes(bytes.as_ref());
+        let new_page = IndexPage::<u128>::from_bytes(bytes.as_ref(), 0);
 
         assert_eq!(new_page.node_id, page.node_id);
         assert_eq!(new_page.current_index, page.current_index);
@@ -355,7 +355,7 @@ mod tests {
             size,
         );
         let bytes = page.as_bytes();
-        let new_page = IndexPage::<Uuid>::from_bytes(bytes.as_ref());
+        let new_page = IndexPage::<Uuid>::from_bytes(bytes.as_ref(), 0);
 
         assert_eq!(new_page.node_id, page.node_id);
         assert_eq!(new_page.current_index, page.current_index);

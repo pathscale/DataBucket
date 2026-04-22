@@ -19,7 +19,7 @@ pub use index::{
     TableOfContentsPage, UnsizedIndexPage, UnsizedIndexPageUtility,
 };
 //pub use iterators::{DataIterator, LinksIterator};
-pub use space_info::{Interval, SpaceInfoPage, SpaceInfoPageV1};
+pub use space_info::{Interval, SpaceInfoPage};
 pub use ty::PageType;
 pub use util::{
     map_data_pages_to_general, parse_data_page, parse_data_pages_batch,
