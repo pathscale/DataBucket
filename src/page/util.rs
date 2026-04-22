@@ -5,7 +5,7 @@ use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use super::SpaceInfoPage;
+use super::{SpaceInfoPage, SpaceInfoPageV1};
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::{DataPage, GeneralPage, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
@@ -319,12 +319,27 @@ pub async fn parse_space_info<const PAGE_SIZE: usize>(
 
     let mut buffer = vec![0u8; header.data_length as usize];
     file.read_exact(&mut buffer).await?;
-    let archived =
-        unsafe { rkyv::access_unchecked::<<SpaceInfoPage as Archive>::Archived>(&buffer[..]) };
-    let space_info: SpaceInfoPage =
-        rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
 
-    Ok(space_info)
+    match header.data_version {
+        1 => {
+            // Old format - parse as V1 and migrate
+            let archived = unsafe {
+                rkyv::access_unchecked::<<SpaceInfoPageV1 as Archive>::Archived>(&buffer[..])
+            };
+            let v1: SpaceInfoPageV1 =
+                rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+            Ok(v1.into())
+        }
+        _ => {
+            // New format (version 2+) - parse directly
+            let archived = unsafe {
+                rkyv::access_unchecked::<<SpaceInfoPage as Archive>::Archived>(&buffer[..])
+            };
+            let space_info: SpaceInfoPage =
+                rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
+            Ok(space_info)
+        }
+    }
 }
 
 // pub fn read_index_pages<T, const PAGE_SIZE: usize>(
