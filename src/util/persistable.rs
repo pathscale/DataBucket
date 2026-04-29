@@ -10,7 +10,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 pub trait Persistable {
     fn as_bytes(&self) -> impl AsRef<[u8]> + Send;
-    fn from_bytes(bytes: &[u8]) -> Self;
+    fn from_bytes(bytes: &[u8], version: u32) -> Self;
 }
 
 impl<T> Persistable for Vec<T>
@@ -27,7 +27,7 @@ where
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
     }
@@ -38,7 +38,7 @@ impl Persistable for u8 {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
     }
@@ -49,7 +49,7 @@ impl Persistable for String {
         rkyv::to_bytes::<rkyv::rancor::Error>(self).unwrap()
     }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
     }

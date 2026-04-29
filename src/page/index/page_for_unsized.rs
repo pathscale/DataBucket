@@ -106,7 +106,7 @@ where
         .await?;
         let mut index_utility_bytes = vec![0u8; index_utility_len];
         file.read_exact(index_utility_bytes.as_mut_slice()).await?;
-        let utility = UnsizedIndexPageUtility::<T>::from_bytes(&index_utility_bytes);
+        let utility = UnsizedIndexPageUtility::<T>::from_bytes(&index_utility_bytes, 0);
 
         Ok(utility)
     }
@@ -304,7 +304,7 @@ where
         bytes
     }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         let slots_size_bytes = &bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()];
         let archived =
             unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(slots_size_bytes) };
@@ -321,7 +321,7 @@ where
             slots_size as usize,
             node_id_size as usize,
         );
-        let utility = UnsizedIndexPageUtility::<T>::from_bytes(&bytes[0..utility_len]);
+        let utility = UnsizedIndexPageUtility::<T>::from_bytes(&bytes[0..utility_len], _version);
         let mut index_values = Vec::with_capacity(utility.slots.len());
         for (offset, len) in &utility.slots {
             let offset = bytes.len() - *offset as usize;
@@ -360,7 +360,7 @@ mod test {
         .unwrap();
         let bytes = page.as_bytes();
         assert_eq!(bytes.as_ref().len(), 1024);
-        let page_back = UnsizedIndexPage::from_bytes(bytes.as_ref());
+        let page_back = UnsizedIndexPage::from_bytes(bytes.as_ref(), 0);
         assert_eq!(page_back, page)
     }
 
