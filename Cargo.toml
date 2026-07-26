@@ -3,7 +3,7 @@ members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
-version = "0.3.15"
+version = "0.4.0"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
@@ -16,11 +16,10 @@ data_bucket_derive = { path = "codegen", version = "=0.3.15" }
 eyre = "0.6.12"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
 rkyv = { version = "0.8.9", features = ["uuid-1"] }
-lockfree = "0.5.1"
 uuid = { version = "1.11.0", features = ["v4"] }
 psc-nanoid = { version = "3.1.1", features = ["rkyv", "packed"] }
 ordered-float = "5.0.0"
-indexset = { version = "=0.16.0", features = ["concurrent", "cdc", "multimap"] }
+indexset = { package = "WorkTablesIndex", version = "=0.0.1", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", path = "../indexset", version = "0.12.10", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", version = "0.12.12", features = ["concurrent", "cdc", "multimap"] }
 tokio = { version = "1", features = ["full"] }

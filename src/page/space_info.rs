@@ -116,7 +116,8 @@ where
                 rkyv::rancor::Error,
             >,
         >,
-    <Pk as Archive>::Archived: rkyv::Deserialize<Pk, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
+    <Pk as Archive>::Archived:
+        rkyv::Deserialize<Pk, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> + Send {
         let v2 = SpaceInfoPageV2 {
@@ -200,7 +201,10 @@ mod test {
         assert_eq!(migrated.id, 42.into());
         assert_eq!(migrated.page_count, 5);
         assert_eq!(migrated.name, "legacy_table");
-        assert_eq!(migrated.row_schema, vec![("col1".to_string(), "i32".to_string())]);
+        assert_eq!(
+            migrated.row_schema,
+            vec![("col1".to_string(), "i32".to_string())]
+        );
         assert_eq!(migrated.primary_key_fields, vec!["col1".to_string()]);
     }
 
