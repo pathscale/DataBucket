@@ -17,6 +17,7 @@ jobs:
   build:
 
     runs-on: ubicloud-standard-2
+    timeout-minutes: 10
 
     steps:
     - uses: actions/checkout@v4
@@ -33,6 +34,7 @@ jobs:
   clippy_check:
 
     runs-on: ubicloud-standard-2
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
