@@ -63,7 +63,7 @@ where
         };
         rkyv::to_bytes::<rkyv::rancor::Error>(&model).unwrap()
     }
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         let archived = unsafe {
             rkyv::access_unchecked::<<TableOfContentsPagePersisted<T> as Archive>::Archived>(bytes)
         };

@@ -92,26 +92,28 @@ where
     }
 }
 
-impl<T> From<Pair<T, Link>> for IndexValue<T>
+impl<T, L> From<Pair<T, L>> for IndexValue<T>
 where
     T: Ord,
+    L: Into<Link>,
 {
-    fn from(pair: Pair<T, Link>) -> Self {
+    fn from(pair: Pair<T, L>) -> Self {
         IndexValue {
             key: pair.key,
-            link: pair.value,
+            link: pair.value.into(),
         }
     }
 }
 
-impl<T> From<MultiPair<T, Link>> for IndexValue<T>
+impl<T, L> From<MultiPair<T, L>> for IndexValue<T>
 where
     T: Ord,
+    L: Into<Link>,
 {
-    fn from(pair: MultiPair<T, Link>) -> Self {
+    fn from(pair: MultiPair<T, L>) -> Self {
         IndexValue {
             key: pair.key,
-            link: pair.value,
+            link: pair.value.into(),
         }
     }
 }

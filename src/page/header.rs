@@ -9,7 +9,7 @@ use crate::space;
 use crate::util::Persistable;
 use crate::PAGE_SIZE;
 
-pub const DATA_VERSION: u32 = 1u32;
+pub const DATA_VERSION: u32 = 2u32;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
@@ -107,7 +107,7 @@ mod test {
     #[test]
     fn test_data_version() {
         let header = GeneralHeader::new(1.into(), PageType::Empty, 2.into());
-        assert_eq!(header.data_version, 1u32);
+        assert_eq!(header.data_version, DATA_VERSION);
     }
 
     #[test]

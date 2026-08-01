@@ -1,6 +1,6 @@
 [package]
 name = "data_bucket_derive"
-version = "0.2.6"
+version = "0.3.15"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
@@ -24,4 +24,3 @@ convert_case = "0.6.0"
 derive_more = { version = "1.0.0", features = ["from", "error", "display", "into"] }
 rkyv = { version = "0.7.45", features = ["uuid"] }
 scc = "2.1.16"
-lock_freedom = "0.1"

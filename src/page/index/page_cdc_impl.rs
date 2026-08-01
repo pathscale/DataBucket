@@ -55,7 +55,7 @@ where
                 value,
                 index,
             } => {
-                if max_value == value && index != 0 {
+                if max_value == value && index != 0 && index == self.current_length as usize - 1 {
                     // If we are removing max value, we need to update node_id.
                     // It will be previous value in a node.
                     let previous_value_pos = self.slots[index - 1];

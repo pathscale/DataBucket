@@ -16,10 +16,15 @@ env:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: "true"
+        add-job-id-key: "false"
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -28,16 +33,19 @@ jobs:
 
   clippy_check:
 
-    runs-on: ubuntu-latest
-    
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 10
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-            toolchain: stable
-            components: clippy
-            override: true
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-targets --all-features -- -D warnings
+          cache-on-failure: "true"
+          add-job-id-key: "false"
+      # Plain cargo invocation instead of the archived actions-rs/clippy-check:
+      # that action fails with "Resource not accessible by integration" on
+      # push events because it needs `checks: write` to create a Check Run,
+      # which this workflow's token does not (and should not) grant. The
+      # command's exit code is all we need to gate the job.
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings

@@ -1,11 +1,13 @@
 use crate::link::{Link, LINK_LENGTH};
 use ordered_float::OrderedFloat;
+use psc_nanoid::packed::AlphabetPackExt;
+use psc_nanoid::PackedNanoid;
 use rkyv::util::AlignedVec;
 use std::{mem, sync::Arc};
 use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
-    if len % 4 == 0 {
+    if len.is_multiple_of(4) {
         len
     } else {
         (len / 4 + 1) * 4
@@ -13,7 +15,7 @@ pub const fn align(len: usize) -> usize {
 }
 
 pub const fn align8(len: usize) -> usize {
-    if len % 8 == 0 {
+    if len.is_multiple_of(8) {
         len
     } else {
         (len / 8 + 1) * 8
@@ -67,6 +69,12 @@ impl SizeMeasurable for Link {
 impl SizeMeasurable for Uuid {
     fn aligned_size(&self) -> usize {
         16
+    }
+}
+
+impl<const N: usize, const B: usize, A: AlphabetPackExt> SizeMeasurable for PackedNanoid<N, B, A> {
+    fn aligned_size(&self) -> usize {
+        B
     }
 }
 
@@ -166,16 +174,14 @@ impl<T: SizeMeasurable> SizeMeasurable for Arc<T> {
     }
 }
 
-impl<T: SizeMeasurable> SizeMeasurable for lock_freedom::set::Set<T> {
-    fn aligned_size(&self) -> usize {
-        self.iter().map(|elem| elem.aligned_size()).sum()
-    }
-}
-
 impl<T: SizeMeasurable> SizeMeasurable for Option<T>
 where
     T: SizeMeasurable,
 {
+    fn align() -> Option<usize> {
+        T::align()
+    }
+
     fn aligned_size(&self) -> usize {
         size_of::<Option<T>>()
     }
@@ -217,20 +223,22 @@ impl VariableSizeMeasurable for String {
     }
 }
 
-impl<K> VariableSizeMeasurable for indexset::core::pair::Pair<K, Link>
+impl<K, L> VariableSizeMeasurable for indexset::core::pair::Pair<K, L>
 where
     K: VariableSizeMeasurable,
+    L: SizeMeasurable + Default,
 {
     fn aligned_size(length: usize) -> usize {
-        align(Link::default().aligned_size() + K::aligned_size(length))
+        align(L::default().aligned_size() + K::aligned_size(length))
     }
 }
-impl<K> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, Link>
+impl<K, L> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, L>
 where
     K: VariableSizeMeasurable,
+    L: SizeMeasurable + Default,
 {
     fn aligned_size(length: usize) -> usize {
-        align(Link::default().aligned_size() + K::aligned_size(length))
+        align(L::default().aligned_size() + K::aligned_size(length))
     }
 }
 
@@ -298,7 +306,20 @@ mod test {
         assert_eq!(
             t.aligned_size(),
             to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let t = (Some(0.0f64), Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
         )
+    }
+    #[test]
+    fn test_option() {
+        let t = Some(0.0f64);
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
     }
 
     #[test]
@@ -327,5 +348,30 @@ mod test {
                 rkyv::to_bytes::<rkyv::rancor::Error>(&v).unwrap().len()
             )
         }
+    }
+
+    #[test]
+    fn test_packed_nanoid() {
+        use psc_nanoid::{alphabet::Base64UrlAlphabet, packed::PackedNanoid, Nanoid};
+
+        fn check<const N: usize, const B: usize>() {
+            let id = Nanoid::<N, Base64UrlAlphabet>::new();
+            let packed = PackedNanoid::<N, B, Base64UrlAlphabet>::pack(&id).unwrap();
+            assert_eq!(
+                packed.aligned_size(),
+                rkyv::to_bytes::<rkyv::rancor::Error>(&packed)
+                    .unwrap()
+                    .len()
+            );
+        }
+
+        // For Base64UrlAlphabet, PACK_BITS = 6, so B = ceil(N * 6 / 8)
+        check::<1, 1>();
+        check::<6, 5>();
+        check::<10, 8>();
+        check::<21, 16>();
+        check::<32, 24>();
+        check::<42, 32>();
+        check::<64, 48>();
     }
 }

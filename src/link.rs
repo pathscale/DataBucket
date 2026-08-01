@@ -25,6 +25,15 @@ pub struct Link {
     pub length: u32,
 }
 
+impl<T> PartialEq<T> for Link
+where
+    T: AsRef<Link>,
+{
+    fn eq(&self, other: &T) -> bool {
+        other.as_ref().eq(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::link::Link;
