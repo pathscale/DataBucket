@@ -49,6 +49,10 @@ where
         >,
     <T as rkyv::Archive>::Archived:
         rkyv::Deserialize<T, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>> + Ord,
+    <TableOfContentsPagePersisted<T> as rkyv::Archive>::Archived:
+        for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> {
         let records = self
@@ -64,9 +68,13 @@ where
         rkyv::to_bytes::<rkyv::rancor::Error>(&model).unwrap()
     }
     fn from_bytes(bytes: &[u8], _version: u32) -> Self {
-        let archived = unsafe {
-            rkyv::access_unchecked::<<TableOfContentsPagePersisted<T> as Archive>::Archived>(bytes)
-        };
+        // Validated: the table of contents is the map every other read
+        // trusts, so a torn one must fail loudly here.
+        let archived = rkyv::access::<
+            <TableOfContentsPagePersisted<T> as Archive>::Archived,
+            rkyv::rancor::Error,
+        >(bytes)
+        .expect("torn or corrupt table of contents page: the bytes fail validation");
         let model: TableOfContentsPagePersisted<T> =
             rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
         let records = BTreeMap::from_iter(model.records);

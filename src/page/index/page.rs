@@ -79,7 +79,8 @@ where
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         > + Send
         + Sync,
-    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+        + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
 {
     type Utility = SizedIndexPageUtility<T>;
 
@@ -93,11 +94,12 @@ where
 
         let mut size_bytes = vec![0u8; SizedIndexPageUtility::<T>::size_size()];
         file.read_exact(size_bytes.as_mut_slice()).await?;
-        let archived = unsafe {
-            rkyv::access_unchecked::<<u16 as Archive>::Archived>(
-                &size_bytes[0..SizedIndexPageUtility::<T>::size_size()],
-            )
-        };
+        // Validated: this length field steers how much of the page is read
+        // as index entries, so a torn page must fail here, loudly.
+        let archived = rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(
+            &size_bytes[0..SizedIndexPageUtility::<T>::size_size()],
+        )
+        .map_err(|error| eyre::eyre!("torn or corrupt index page size field: {error}"))?;
         let size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
@@ -160,14 +162,22 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
     async fn read_value(file: &mut File) -> eyre::Result<IndexValue<T>>
     where
         T: Archive,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
+        <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
     {
         let mut bytes = vec![0u8; IndexPage::<T>::index_values_value_size()];
         file.read_exact(bytes.as_mut_slice()).await?;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(bytes.as_slice());
+        // Validated: a torn index entry must be an error, not a dangling link.
         let archived =
-            unsafe { rkyv::access_unchecked::<<IndexValue<T> as Archive>::Archived>(&v[..]) };
+            rkyv::access::<<IndexValue<T> as Archive>::Archived, rkyv::rancor::Error>(&v[..])
+                .map_err(|error| eyre::eyre!("torn or corrupt index entry: {error}"))?;
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
@@ -179,7 +189,13 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
     ) -> eyre::Result<IndexValue<T>>
     where
         T: Archive,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
+        <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
     {
         seek_to_page_start(file, page_id.0).await?;
         let offset = Self::get_value_offset(size, index);
@@ -215,7 +231,13 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
             + for<'a> Serialize<
                 Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
             >,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
+        <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
     {
         seek_to_page_start(file, page_id.0).await?;
 
@@ -249,7 +271,13 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
             + for<'a> Serialize<
                 Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
             >,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
+        <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
     {
         seek_to_page_start(file, page_id.0).await?;
 

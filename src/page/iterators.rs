@@ -44,13 +44,14 @@ impl<'a> LinksIterator<'a> {
 
 fn parse_links<T>(buffer: &[u8]) -> Vec<Link>
 where T: Archive,
+    <IndexData<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
     [ArchivedIndexValue<T>]: DeserializeUnsized<[IndexValue<T>], Strategy<Pool, rkyv::rancor::Error>>
 {
-    let archived = unsafe {
-        rkyv::access_unchecked::<<IndexData<T> as Archive>::Archived>(
-            &buffer[..],
-        )
-    };
+    // Validated: these bytes are read straight off disk, and a torn index
+    // page must fail loudly here rather than dangle links into nowhere.
+    let archived =
+        rkyv::access::<<IndexData<T> as Archive>::Archived, rkyv::rancor::Error>(&buffer[..])
+            .expect("torn or corrupt index page: the archived bytes fail validation");
     let index_records =
         rkyv::deserialize::<IndexData<T>, rkyv::rancor::Error>(archived)
             .expect("data should be valid")
