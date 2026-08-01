@@ -116,8 +116,8 @@ where
                 rkyv::rancor::Error,
             >,
         >,
-    <Pk as Archive>::Archived:
-        rkyv::Deserialize<Pk, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
+    <Pk as Archive>::Archived: rkyv::Deserialize<Pk, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>
+        + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> + Send {
         let v2 = SpaceInfoPageV2 {

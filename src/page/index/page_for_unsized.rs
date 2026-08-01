@@ -64,7 +64,8 @@ where
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         > + Send
         + Sync,
-    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+        + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
 {
     type Utility = UnsizedIndexPageUtility<T>;
 
@@ -78,20 +79,22 @@ where
 
         let mut slot_size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::slots_size_size()];
         file.read_exact(slot_size_bytes.as_mut_slice()).await?;
-        let archived = unsafe {
-            rkyv::access_unchecked::<<u16 as Archive>::Archived>(
-                &slot_size_bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()],
-            )
-        };
+        // Validated: these two length fields steer every later read of the
+        // page, so a torn page must fail here rather than misdirect them.
+        let archived = rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(
+            &slot_size_bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()],
+        )
+        .map_err(|error| eyre::eyre!("torn or corrupt unsized index page (slots size): {error}"))?;
         let slots_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let mut node_id_size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::node_id_size_size()];
         file.read_exact(node_id_size_bytes.as_mut_slice()).await?;
-        let archived = unsafe {
-            rkyv::access_unchecked::<<u16 as Archive>::Archived>(
-                &node_id_size_bytes[0..UnsizedIndexPageUtility::<T>::node_id_size_size()],
-            )
-        };
+        let archived = rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(
+            &node_id_size_bytes[0..UnsizedIndexPageUtility::<T>::node_id_size_size()],
+        )
+        .map_err(|error| {
+            eyre::eyre!("torn or corrupt unsized index page (node id size): {error}")
+        })?;
         let node_id_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
@@ -122,7 +125,8 @@ where
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
-    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+        + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
 {
     pub fn new(node_id: IndexValue<T>) -> eyre::Result<Self> {
         let len = node_id.aligned_size() as u32;
@@ -203,7 +207,10 @@ where
             + for<'a> Serialize<
                 Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
             >,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
     {
         // We seek to page's end and will write values from tail.
         seek_to_page_start(file, page_id.0 + 1).await?;
@@ -219,14 +226,22 @@ where
     async fn read_value(file: &mut File, len: u16) -> eyre::Result<IndexValue<T>>
     where
         T: Archive,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
+        <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
     {
         let mut bytes = vec![0u8; len as usize];
         file.read_exact(bytes.as_mut_slice()).await?;
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(bytes.as_slice());
+        // Validated: a torn index entry must be an error, not a dangling link.
         let archived =
-            unsafe { rkyv::access_unchecked::<<IndexValue<T> as Archive>::Archived>(&v[..]) };
+            rkyv::access::<<IndexValue<T> as Archive>::Archived, rkyv::rancor::Error>(&v[..])
+                .map_err(|error| eyre::eyre!("torn or corrupt unsized index entry: {error}"))?;
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
@@ -238,7 +253,13 @@ where
     ) -> eyre::Result<IndexValue<T>>
     where
         T: Archive,
-        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+        <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+            + for<'a> rkyv::bytecheck::CheckBytes<
+                rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+            >,
+        <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+            rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+        >,
     {
         seek_to_page_start(file, page_id.0 + 1).await?;
         file.seek(SeekFrom::Current(-(offset as i64))).await?;
@@ -276,7 +297,11 @@ where
         + for<'a> Serialize<
             Strategy<Serializer<AlignedVec, ArenaHandle<'a>, Share>, rkyv::rancor::Error>,
         >,
-    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
+    <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
+        + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
+    <IndexValue<T> as Archive>::Archived: for<'a> rkyv::bytecheck::CheckBytes<
+        rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
+    >,
 {
     fn as_bytes(&self) -> impl AsRef<[u8]> + Send {
         let data_length = DATA_LENGTH as usize;
@@ -305,16 +330,21 @@ where
     }
 
     fn from_bytes(bytes: &[u8], _version: u32) -> Self {
+        // Validated throughout: `from_bytes` has no error channel, so a torn
+        // page becomes a named panic here instead of undefined behavior in
+        // whatever walks the misread entries later.
         let slots_size_bytes = &bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()];
         let archived =
-            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(slots_size_bytes) };
+            rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(slots_size_bytes)
+                .expect("torn or corrupt unsized index page: slots size fails validation");
         let slots_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let node_id_size_bytes = &bytes[UnsizedIndexPageUtility::<T>::slots_size_size()
             ..UnsizedIndexPageUtility::<T>::node_id_size_size()
                 + UnsizedIndexPageUtility::<T>::node_id_size_size()];
         let archived =
-            unsafe { rkyv::access_unchecked::<<u16 as Archive>::Archived>(node_id_size_bytes) };
+            rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(node_id_size_bytes)
+                .expect("torn or corrupt unsized index page: node id size fails validation");
         let node_id_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let utility_len = UnsizedIndexPageUtility::<T>::persisted_size(
@@ -327,9 +357,11 @@ where
             let offset = bytes.len() - *offset as usize;
             let len = *len as usize;
             let value_bytes = &bytes[offset..(offset + len)];
-            let archived = unsafe {
-                rkyv::access_unchecked::<<IndexValue<T> as Archive>::Archived>(value_bytes)
-            };
+            let archived =
+                rkyv::access::<<IndexValue<T> as Archive>::Archived, rkyv::rancor::Error>(
+                    value_bytes,
+                )
+                .expect("torn or corrupt unsized index page: an entry fails validation");
             let val = rkyv::deserialize::<_, rkyv::rancor::Error>(archived)
                 .expect("data should be valid");
             index_values.push(val)

@@ -47,7 +47,7 @@ impl Generator {
                                     rkyv::ser::Serializer<rkyv::util::AlignedVec, rkyv::ser::allocator::ArenaHandle<'a>, rkyv::ser::sharing::Share>,
                                     rkyv::rancor::Error>,
                             >,
-                        <#ident as rkyv::Archive>::Archived: rkyv::Deserialize<#ident, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>> #archived_bounds,
+                        <#ident as rkyv::Archive>::Archived: rkyv::Deserialize<#ident, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>> + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>> #archived_bounds,
                 }
             } else {
                 quote! {}
@@ -90,7 +90,7 @@ impl Generator {
                 }
 
                 fn from_bytes(bytes: &[u8], _version: u32) -> Self {
-                    let archived = unsafe { rkyv::access_unchecked::<<Self as Archive>::Archived>(bytes) };
+                    let archived = rkyv::access::<<Self as Archive>::Archived, rkyv::rancor::Error>(bytes).expect("torn or corrupt page: the archived bytes fail validation");
                     rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid")
                 }
         }
@@ -214,7 +214,7 @@ impl Generator {
             quote! {
                 let size_length = <#size_type as Default>::default().aligned_size();
                 let archived =
-                    unsafe { rkyv::access_unchecked::<<#size_type as Archive>::Archived>(&bytes[offset..offset + size_length]) };
+                    rkyv::access::<<#size_type as Archive>::Archived, rkyv::rancor::Error>(&bytes[offset..offset + size_length]).expect("torn or corrupt page part: a size field fails validation");
                 let #size_ident =
                     rkyv::deserialize::<#size_type, rkyv::rancor::Error>(archived).expect("data should be valid");
                 offset += size_length;
@@ -240,7 +240,7 @@ impl Generator {
             let length = <#ty as Default>::default().aligned_size();
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + length]);
-            let archived = unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            let archived = rkyv::access::<<#ty as Archive>::Archived, rkyv::rancor::Error>(&v[..]).expect("torn or corrupt page part: a field fails validation");
             let #ident = rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
             offset += length;
         }
@@ -283,7 +283,7 @@ impl Generator {
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + values_len]);
             let archived =
-            unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            rkyv::access::<<#ty as Archive>::Archived, rkyv::rancor::Error>(&v[..]).expect("torn or corrupt page part: a field fails validation");
             let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
                 .expect("data should be valid");
             offset += values_len;
@@ -313,7 +313,7 @@ impl Generator {
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + values_len]);
             let archived =
-            unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            rkyv::access::<<#ty as Archive>::Archived, rkyv::rancor::Error>(&v[..]).expect("torn or corrupt page part: a field fails validation");
             let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
                 .expect("data should be valid");
             offset += values_len;
@@ -343,7 +343,7 @@ impl Generator {
             let mut v = rkyv::util::AlignedVec::<4>::new();
             v.extend_from_slice(&bytes[offset..offset + values_len]);
             let archived =
-            unsafe { rkyv::access_unchecked::<<#ty as Archive>::Archived>(&v[..]) };
+            rkyv::access::<<#ty as Archive>::Archived, rkyv::rancor::Error>(&v[..]).expect("torn or corrupt page part: a field fails validation");
             let #ident = rkyv::deserialize::<#ty, rkyv::rancor::Error>(archived)
                 .expect("data should be valid");
             offset += values_len;
