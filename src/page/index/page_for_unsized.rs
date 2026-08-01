@@ -81,7 +81,7 @@ where
         file.read_exact(slot_size_bytes.as_mut_slice()).await?;
         // Validated: these two length fields steer every later read of the
         // page, so a torn page must fail here rather than misdirect them.
-        let archived = rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(
+        let archived = crate::access_archived::<<u16 as Archive>::Archived>(
             &slot_size_bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()],
         )
         .map_err(|error| eyre::eyre!("torn or corrupt unsized index page (slots size): {error}"))?;
@@ -89,7 +89,7 @@ where
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let mut node_id_size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::node_id_size_size()];
         file.read_exact(node_id_size_bytes.as_mut_slice()).await?;
-        let archived = rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(
+        let archived = crate::access_archived::<<u16 as Archive>::Archived>(
             &node_id_size_bytes[0..UnsizedIndexPageUtility::<T>::node_id_size_size()],
         )
         .map_err(|error| {
@@ -239,9 +239,8 @@ where
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(bytes.as_slice());
         // Validated: a torn index entry must be an error, not a dangling link.
-        let archived =
-            rkyv::access::<<IndexValue<T> as Archive>::Archived, rkyv::rancor::Error>(&v[..])
-                .map_err(|error| eyre::eyre!("torn or corrupt unsized index entry: {error}"))?;
+        let archived = crate::access_archived::<<IndexValue<T> as Archive>::Archived>(&v[..])
+            .map_err(|error| eyre::eyre!("torn or corrupt unsized index entry: {error}"))?;
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
@@ -334,17 +333,15 @@ where
         // page becomes a named panic here instead of undefined behavior in
         // whatever walks the misread entries later.
         let slots_size_bytes = &bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()];
-        let archived =
-            rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(slots_size_bytes)
-                .expect("torn or corrupt unsized index page: slots size fails validation");
+        let archived = crate::access_archived::<<u16 as Archive>::Archived>(slots_size_bytes)
+            .expect("torn or corrupt unsized index page: slots size fails validation");
         let slots_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let node_id_size_bytes = &bytes[UnsizedIndexPageUtility::<T>::slots_size_size()
             ..UnsizedIndexPageUtility::<T>::node_id_size_size()
                 + UnsizedIndexPageUtility::<T>::node_id_size_size()];
-        let archived =
-            rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(node_id_size_bytes)
-                .expect("torn or corrupt unsized index page: node id size fails validation");
+        let archived = crate::access_archived::<<u16 as Archive>::Archived>(node_id_size_bytes)
+            .expect("torn or corrupt unsized index page: node id size fails validation");
         let node_id_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let utility_len = UnsizedIndexPageUtility::<T>::persisted_size(
@@ -358,10 +355,8 @@ where
             let len = *len as usize;
             let value_bytes = &bytes[offset..(offset + len)];
             let archived =
-                rkyv::access::<<IndexValue<T> as Archive>::Archived, rkyv::rancor::Error>(
-                    value_bytes,
-                )
-                .expect("torn or corrupt unsized index page: an entry fails validation");
+                crate::access_archived::<<IndexValue<T> as Archive>::Archived>(value_bytes)
+                    .expect("torn or corrupt unsized index page: an entry fails validation");
             let val = rkyv::deserialize::<_, rkyv::rancor::Error>(archived)
                 .expect("data should be valid");
             index_values.push(val)

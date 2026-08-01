@@ -70,11 +70,9 @@ where
     fn from_bytes(bytes: &[u8], _version: u32) -> Self {
         // Validated: the table of contents is the map every other read
         // trusts, so a torn one must fail loudly here.
-        let archived = rkyv::access::<
-            <TableOfContentsPagePersisted<T> as Archive>::Archived,
-            rkyv::rancor::Error,
-        >(bytes)
-        .expect("torn or corrupt table of contents page: the bytes fail validation");
+        let archived =
+            crate::access_archived::<<TableOfContentsPagePersisted<T> as Archive>::Archived>(bytes)
+                .expect("torn or corrupt table of contents page: the bytes fail validation");
         let model: TableOfContentsPagePersisted<T> =
             rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
         let records = BTreeMap::from_iter(model.records);

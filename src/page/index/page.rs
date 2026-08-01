@@ -96,7 +96,7 @@ where
         file.read_exact(size_bytes.as_mut_slice()).await?;
         // Validated: this length field steers how much of the page is read
         // as index entries, so a torn page must fail here, loudly.
-        let archived = rkyv::access::<<u16 as Archive>::Archived, rkyv::rancor::Error>(
+        let archived = crate::access_archived::<<u16 as Archive>::Archived>(
             &size_bytes[0..SizedIndexPageUtility::<T>::size_size()],
         )
         .map_err(|error| eyre::eyre!("torn or corrupt index page size field: {error}"))?;
@@ -175,9 +175,8 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         let mut v = AlignedVec::<4>::new();
         v.extend_from_slice(bytes.as_slice());
         // Validated: a torn index entry must be an error, not a dangling link.
-        let archived =
-            rkyv::access::<<IndexValue<T> as Archive>::Archived, rkyv::rancor::Error>(&v[..])
-                .map_err(|error| eyre::eyre!("torn or corrupt index entry: {error}"))?;
+        let archived = crate::access_archived::<<IndexValue<T> as Archive>::Archived>(&v[..])
+            .map_err(|error| eyre::eyre!("torn or corrupt index entry: {error}"))?;
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 

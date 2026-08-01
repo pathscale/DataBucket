@@ -50,7 +50,7 @@ where T: Archive,
     // Validated: these bytes are read straight off disk, and a torn index
     // page must fail loudly here rather than dangle links into nowhere.
     let archived =
-        rkyv::access::<<IndexData<T> as Archive>::Archived, rkyv::rancor::Error>(&buffer[..])
+        crate::access_archived::<<IndexData<T> as Archive>::Archived>(&buffer[..])
             .expect("torn or corrupt index page: the archived bytes fail validation");
     let index_records =
         rkyv::deserialize::<IndexData<T>, rkyv::rancor::Error>(archived)

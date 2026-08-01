@@ -150,9 +150,8 @@ pub async fn parse_general_header(file: &mut File) -> eyre::Result<GeneralHeader
     file.read_exact(&mut buffer).await?;
     // Validated: a header torn by a mid-write death must surface as an error
     // naming the page, not as undefined behavior in whatever reads it next.
-    let archived =
-        rkyv::access::<<GeneralHeader as Archive>::Archived, rkyv::rancor::Error>(&buffer[..])
-            .map_err(|error| eyre::eyre!("torn or corrupt page header: {error}"))?;
+    let archived = crate::access_archived::<<GeneralHeader as Archive>::Archived>(&buffer[..])
+        .map_err(|error| eyre::eyre!("torn or corrupt page header: {error}"))?;
     let header = rkyv::deserialize::<_, rkyv::rancor::Error>(archived)
         .map_err(|error| eyre::eyre!("page header failed to deserialize: {error}"))?;
 
