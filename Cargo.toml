@@ -23,3 +23,10 @@ indexset = { package = "WorkTablesIndex", version = "=0.0.1", features = ["concu
 # indexset = { package = "wt-indexset", path = "../indexset", version = "0.12.10", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", version = "0.12.12", features = ["concurrent", "cdc", "multimap"] }
 tokio = { version = "1", features = ["full"] }
+
+[features]
+default = ["validate-reads"]
+# Validate every disk read with bytecheck: a torn page becomes a named
+# error instead of undefined behavior. Disable for latency-critical builds
+# to compile every read back to unchecked access, exactly as before 0.4.1.
+validate-reads = []

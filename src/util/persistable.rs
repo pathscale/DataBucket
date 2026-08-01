@@ -16,14 +16,38 @@ pub trait Persistable {
 }
 
 /*
- * Validated access, not `access_unchecked`. These bytes come off disk, and a
- * process that died mid-write (crash, SIGKILL, an undrained exit) leaves torn
- * pages behind: unchecked access reads a torn page as an archived value whose
- * relative pointers dangle anywhere, and the process dies of SIGBUS in
- * whatever touches them next — usually mid-write, tearing the store further.
- * Validation turns the same bytes into a named panic at the parse site,
- * while the store on disk stays exactly as readable as it was.
+ * The one switch every disk read goes through. These bytes come off disk,
+ * and a process that died mid-write (crash, SIGKILL, an undrained exit)
+ * leaves torn pages behind: unchecked access reads a torn page as an
+ * archived value whose relative pointers dangle anywhere, and the process
+ * dies of SIGBUS in whatever touches them next, usually mid-write, tearing
+ * the store further. With the default `validate-reads` feature the same
+ * bytes become a named error at the parse site instead, while the store on
+ * disk stays exactly as readable as it was.
+ *
+ * `validate-reads` is a default feature rather than unconditional because
+ * this crate also runs at nanosecond scale, where even background-task CPU
+ * is budgeted: `default-features = false` compiles every read back to the
+ * exact `access_unchecked` it was before, zero cost, caveat emptor. The
+ * CheckBytes bounds stay unconditional either way so the API surface does
+ * not shift under a feature flag; derived Archive types satisfy them for
+ * free.
  */
+#[inline]
+pub fn access_archived<A>(bytes: &[u8]) -> Result<&A, rkyv::rancor::Error>
+where
+    A: rkyv::Portable + for<'a> CheckBytes<HighValidator<'a, rkyv::rancor::Error>>,
+{
+    #[cfg(feature = "validate-reads")]
+    {
+        rkyv::access::<A, rkyv::rancor::Error>(bytes)
+    }
+    #[cfg(not(feature = "validate-reads"))]
+    {
+        Ok(unsafe { rkyv::access_unchecked::<A>(bytes) })
+    }
+}
+
 pub(crate) fn checked<T>(bytes: &[u8]) -> T
 where
     T: Archive,
@@ -31,7 +55,7 @@ where
         + for<'a> CheckBytes<HighValidator<'a, rkyv::rancor::Error>>
         + Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>,
 {
-    let archived = rkyv::access::<<T as Archive>::Archived, rkyv::rancor::Error>(bytes)
+    let archived = access_archived::<<T as Archive>::Archived>(bytes)
         .expect("torn or corrupt page: the archived bytes fail validation");
     rkyv::deserialize::<_, rkyv::rancor::Error>(archived)
         .expect("validated archive failed to deserialize")

@@ -1,5 +1,9 @@
 extern crate core;
 
+// The Persistable derive emits paths through the crate name, and this crate
+// uses its own derive: alias ourselves so the generated code resolves here too.
+extern crate self as data_bucket;
+
 pub mod link;
 pub mod page;
 pub mod persistence;
@@ -19,4 +23,5 @@ pub use page::{
 };
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use space::Id as SpaceId;
+pub use util::access_archived;
 pub use util::{align, align8, align_vec, Persistable, SizeMeasurable, VariableSizeMeasurable};
