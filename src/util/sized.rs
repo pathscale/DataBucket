@@ -43,6 +43,16 @@ pub trait SizeMeasurable {
     }
 }
 
+/// A [`SizeMeasurable`] type whose default value can be measured without
+/// constructing it at each call site.
+pub trait DefaultSizeMeasurable: Default + SizeMeasurable {
+    fn default_aligned_size() -> usize {
+        Self::default().aligned_size()
+    }
+}
+
+impl<T> DefaultSizeMeasurable for T where T: Default + SizeMeasurable {}
+
 macro_rules! size_measurable_for_sized {
     ($($t:ident),+) => {
         $(
@@ -59,6 +69,23 @@ macro_rules! size_measurable_for_sized {
 }
 
 size_measurable_for_sized! {u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, bool}
+
+macro_rules! size_measurable_for_primitive_arrays {
+    ($($t:ident),+) => {
+        $(
+            impl<const N: usize> SizeMeasurable for [$t; N] {
+                fn aligned_size(&self) -> usize {
+                    mem::size_of::<[$t; N]>()
+                }
+            }
+        )+
+    };
+}
+
+// Deliberately retain the previous `align() == None` behavior of the existing
+// `[u8; 20]` and `[u8; 32]` implementations. Changing that value can alter
+// persisted tuple and page offsets.
+size_measurable_for_primitive_arrays! {u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, bool}
 
 impl SizeMeasurable for Link {
     fn aligned_size(&self) -> usize {
@@ -84,18 +111,6 @@ where
 {
     fn aligned_size(&self) -> usize {
         self.0.aligned_size()
-    }
-}
-
-impl SizeMeasurable for [u8; 32] {
-    fn aligned_size(&self) -> usize {
-        mem::size_of::<[u8; 32]>()
-    }
-}
-
-impl SizeMeasurable for [u8; 20] {
-    fn aligned_size(&self) -> usize {
-        mem::size_of::<[u8; 20]>()
     }
 }
 
@@ -146,10 +161,10 @@ impl SizeMeasurable for String {
 
 impl<T> SizeMeasurable for Vec<T>
 where
-    T: SizeMeasurable + Default,
+    T: DefaultSizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
-        let val_size = T::default().aligned_size();
+        let val_size = T::default_aligned_size();
         let vec_content_size = if val_size == 2 {
             2
         } else if val_size == 4 {
@@ -226,28 +241,49 @@ impl VariableSizeMeasurable for String {
 impl<K, L> VariableSizeMeasurable for indexset::core::pair::Pair<K, L>
 where
     K: VariableSizeMeasurable,
-    L: SizeMeasurable + Default,
+    L: DefaultSizeMeasurable,
 {
     fn aligned_size(length: usize) -> usize {
-        align(L::default().aligned_size() + K::aligned_size(length))
+        align(L::default_aligned_size() + K::aligned_size(length))
     }
 }
 impl<K, L> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, L>
 where
     K: VariableSizeMeasurable,
-    L: SizeMeasurable + Default,
+    L: DefaultSizeMeasurable,
 {
     fn aligned_size(length: usize) -> usize {
-        align(L::default().aligned_size() + K::aligned_size(length))
+        align(L::default_aligned_size() + K::aligned_size(length))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::util::sized::SizeMeasurable;
+    use crate::util::sized::{DefaultSizeMeasurable, SizeMeasurable};
     use crate::{IndexValue, Link};
     use rkyv::to_bytes;
     use uuid::Uuid;
+
+    #[test]
+    fn primitive_arrays_preserve_existing_alignment_contract() {
+        assert_eq!([0u8; 20].aligned_size(), 20);
+        assert_eq!([0u8; 32].aligned_size(), 32);
+        assert_eq!(<[u8; 20] as SizeMeasurable>::align(), None);
+        assert_eq!(<[u8; 32] as SizeMeasurable>::align(), None);
+
+        let values = [1u16, 2, 3];
+        assert_eq!(
+            values.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&values)
+                .unwrap()
+                .len()
+        );
+    }
+
+    #[test]
+    fn default_size_helper_matches_previous_expression() {
+        assert_eq!(u64::default_aligned_size(), u64::default().aligned_size());
+    }
 
     #[test]
     fn test_uuid() {

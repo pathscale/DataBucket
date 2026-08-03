@@ -24,4 +24,7 @@ pub use page::{
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use space::Id as SpaceId;
 pub use util::access_archived;
-pub use util::{align, align8, align_vec, Persistable, SizeMeasurable, VariableSizeMeasurable};
+pub use util::{
+    align, align8, align_vec, DefaultSizeMeasurable, Persistable, SizeMeasurable,
+    VariableSizeMeasurable,
+};

@@ -37,7 +37,7 @@ impl Generator {
             .map(|f| {
                 let t = &f.ty;
                 quote! {
-                    if #t::align() == Some(8) {
+                    if <#t as SizeMeasurable>::align() == Some(8) {
                         return Some(8)
                     }
                 }

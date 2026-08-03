@@ -1,19 +1,19 @@
+mod enum_generator;
 mod generator;
 mod parser;
 
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::size_measure::enum_generator::EnumGenerator;
 use crate::size_measure::generator::Generator;
-use crate::size_measure::parser::Parser;
+use crate::size_measure::parser::{ParsedItem, Parser};
 
 pub fn expand(input: &TokenStream) -> syn::Result<TokenStream> {
-    let input_fn = Parser::parse_struct(input)?;
-    let gen = Generator {
-        struct_def: input_fn,
+    let impl_def = match Parser::parse(input)? {
+        ParsedItem::Struct(struct_def) => Generator { struct_def }.gen_impl(),
+        ParsedItem::Enum(enum_def) => EnumGenerator { enum_def }.gen_impl()?,
     };
-
-    let impl_def = gen.gen_impl();
 
     Ok(quote! {
         #impl_def

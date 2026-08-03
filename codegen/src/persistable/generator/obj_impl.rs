@@ -20,7 +20,7 @@ impl Generator {
                     if let GenericParam::Type(param) = generic {
                         let ident = &param.ident;
                         quote! {
-                            #ident: Default + SizeMeasurable,
+                            #ident: DefaultSizeMeasurable,
                         }
                     } else {
                         quote! {}
@@ -172,7 +172,7 @@ impl Generator {
         );
         quote! {
             pub fn #fn_ident() -> usize {
-                <#ty as Default>::default().aligned_size()
+                <#ty as DefaultSizeMeasurable>::default_aligned_size()
             }
         }
     }
@@ -218,7 +218,7 @@ impl Generator {
         );
         let len_in_vec = if is_primitive(&inner_ty_str) {
             quote! {
-                align(length * <#inner_ty as Default>::default().aligned_size()) + 8
+                align(length * <#inner_ty as DefaultSizeMeasurable>::default_aligned_size()) + 8
             }
         } else {
             quote! {
@@ -227,14 +227,14 @@ impl Generator {
         };
         let len_value = if is_primitive(&inner_ty_str) {
             quote! {
-                <#inner_ty as Default>::default().aligned_size()
+                <#inner_ty as DefaultSizeMeasurable>::default_aligned_size()
             }
         } else {
             quote! {
                 if <#inner_ty as SizeMeasurable>::align() == Some(8) {
-                    align8(<#inner_ty as Default>::default().aligned_size())
+                    align8(<#inner_ty as DefaultSizeMeasurable>::default_aligned_size())
                 } else {
-                    <#inner_ty as Default>::default().aligned_size()
+                    <#inner_ty as DefaultSizeMeasurable>::default_aligned_size()
                 }
             }
         };
