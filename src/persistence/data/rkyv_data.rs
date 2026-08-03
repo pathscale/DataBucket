@@ -5,6 +5,10 @@ pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
     buf: &[u8],
     columns: &[(S1, S2)],
 ) -> Vec<DataTypeValue> {
+    if columns.is_empty() {
+        return Vec::new();
+    }
+
     let mut data_length: usize = {
         let mut accum: usize = 0;
         for column in columns.iter() {
@@ -19,17 +23,25 @@ pub fn parse_archived_row<S1: AsRef<str>, S2: AsRef<str>>(
         data_length += 4 - data_length % 4;
     }
 
-    let start_pointer = unsafe { buf.as_ptr().add(buf.len()).sub(data_length) };
-    let mut current_pointer = start_pointer;
+    let row_start = buf.len().checked_sub(data_length).unwrap_or_else(|| {
+        panic!(
+            "archived row buffer is too short: schema requires {data_length} bytes, buffer has {}",
+            buf.len()
+        )
+    });
+    let mut row_offset = 0usize;
     let mut output: Vec<_> = vec![];
     for column in columns.iter() {
         let value =
             DataTypeValue::from_str(column.1.as_ref()).expect("data type should be supported");
         let data_type = value.as_data_type();
-        let deserialized = data_type.from_pointer(current_pointer, start_pointer);
-        data_type.advance_pointer_for_padding(&mut current_pointer, start_pointer);
+        data_type.advance_accum(&mut row_offset);
+        let field_end = row_start
+            .checked_add(row_offset)
+            .filter(|field_end| *field_end <= buf.len())
+            .expect("archived row field extends beyond the buffer");
+        let deserialized = data_type.from_archived_bytes(&buf[..field_end]);
         output.push(deserialized);
-        data_type.advance_pointer(&mut current_pointer);
     }
     output
 }
@@ -59,6 +71,29 @@ mod test {
         )
     }
 
+    #[test]
+    fn empty_schema_accepts_empty_buffer() {
+        let columns: [(String, String); 0] = [];
+        assert!(parse_archived_row(&[], &columns).is_empty());
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "archived row buffer is too short: schema requires 8 bytes, buffer has 0"
+    )]
+    fn short_buffer_panics_before_pointer_arithmetic() {
+        let _ = parse_archived_row(&[], &[("col", "String")]);
+    }
+
+    #[test]
+    #[should_panic(expected = "archived row string field is invalid")]
+    fn malformed_string_archive_is_rejected() {
+        // An out-of-line string of length 9 whose relative pointer is far
+        // outside this eight-byte buffer.
+        let malformed = [0x89, 0, 0, 0, 0x7f, 0x7f, 0x7f, 0x7f];
+        let _ = parse_archived_row(&malformed, &[("col", "String")]);
+    }
+
     #[derive(Archive, Serialize, Deserialize, Debug)]
     struct Struct2 {
         pub int1: i32,
@@ -69,6 +104,17 @@ mod test {
         let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct2 { int1: 3 }).unwrap();
         let parsed = parse_archived_row(&buffer, &[("int1", "i32")]);
         assert_eq!(parsed, [DataTypeValue::I32(3)])
+    }
+
+    #[test]
+    #[should_panic(expected = "archived row primitive field is invalid")]
+    fn misaligned_primitive_archive_is_rejected() {
+        let buffer = rkyv::to_bytes::<rkyv::rancor::Error>(&Struct2 { int1: 3 }).unwrap();
+        let mut storage = Vec::with_capacity(buffer.len() + 1);
+        storage.push(0);
+        storage.extend_from_slice(&buffer);
+
+        let _ = parse_archived_row(&storage[1..], &[("int1", "i32")]);
     }
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
