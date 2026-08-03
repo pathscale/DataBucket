@@ -4,7 +4,7 @@ use rkyv::{de::Pool, rancor::Strategy, Archive, DeserializeUnsized};
 
 use crate::{
     page::util::parse_general_header,
-    persistence::data::{rkyv_data::parse_archived_row, DataTypeValue},
+    persistence::data::{rkyv_data::parse_archived_row, DataDecodeError, DataTypeValue},
     IndexData, Link,
 };
 
@@ -136,7 +136,7 @@ impl DataIterator<'_> {
 }
 
 impl Iterator for DataIterator<'_> {
-    type Item = Vec<DataTypeValue>;
+    type Item = Result<Vec<DataTypeValue>, DataDecodeError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.link_index >= self.links.len() {
@@ -210,7 +210,7 @@ mod test {
         let data_iterator: DataIterator<'_> =
             DataIterator::new(&mut file, space_info.row_schema, links);
         assert_eq!(
-            data_iterator.collect::<Vec<_>>(),
+            data_iterator.collect::<Result<Vec<_>, _>>().unwrap(),
             vec![
                 vec![
                     DataTypeValue::I32(1),

@@ -78,7 +78,7 @@ fn main() -> eyre::Result<()> {
     for page in pages {
         let links = LinksIterator::new(&mut file, page, &space_info).collect::<Vec<_>>();
         for row in DataIterator::new(&mut file, row_schema.clone(), links) {
-            rows.push(row);
+            rows.push(row?);
         }
     }
 
