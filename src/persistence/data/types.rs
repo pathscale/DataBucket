@@ -8,8 +8,8 @@ use rkyv::primitive::{
 };
 use rkyv::string::ArchivedString;
 
-use crate::persistence::data::util::{advance_accum_for_padding, advance_pointer_for_padding};
-use crate::persistence::data::DataType;
+use crate::persistence::data::util::advance_accum_for_padding;
+use crate::persistence::data::{DataDecodeError, DataType};
 
 #[derive(Debug, Display, From, PartialEq)]
 pub enum DataTypeValue {
@@ -49,10 +49,10 @@ impl DataTypeValue {
 }
 
 impl FromStr for DataTypeValue {
-    type Err = ();
+    type Err = DataDecodeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
+        let value = match s {
             "String" => String::default().into(),
             "i128" => i128::default().into(),
             "i64" => i64::default().into(),
@@ -66,8 +66,13 @@ impl FromStr for DataTypeValue {
             "u8" => u8::default().into(),
             "f64" => f64::default().into(),
             "f32" => f32::default().into(),
-            _ => unreachable!(),
-        })
+            _ => {
+                return Err(DataDecodeError::UnsupportedDataType {
+                    data_type: s.to_owned(),
+                })
+            }
+        };
+        Ok(value)
     }
 }
 
@@ -77,18 +82,15 @@ impl DataType for String {
         *accum += size_of::<ArchivedString>();
     }
 
-    fn from_pointer(&self, pointer: *const u8, start_pointer: *const u8) -> DataTypeValue {
-        let current_pointer = advance_pointer_for_padding(pointer, start_pointer, 4);
-        let archived_ptr: *const ArchivedString = current_pointer.cast();
-        unsafe { (*archived_ptr).to_string() }.into()
-    }
-
-    fn advance_pointer_for_padding(&self, pointer: &mut *const u8, start_pointer: *const u8) {
-        *pointer = advance_pointer_for_padding(*pointer, start_pointer, 4);
-    }
-
-    fn advance_pointer(&self, pointer: &mut *const u8) {
-        *pointer = unsafe { pointer.add(size_of::<ArchivedString>()) };
+    fn from_archived_bytes(&self, bytes: &[u8]) -> Result<DataTypeValue, DataDecodeError> {
+        let archived =
+            rkyv::access::<ArchivedString, rkyv::rancor::Error>(bytes).map_err(|error| {
+                DataDecodeError::InvalidArchive {
+                    data_type: "String",
+                    message: error.to_string(),
+                }
+            })?;
+        Ok(archived.as_str().to_owned().into())
     }
 }
 
@@ -100,31 +102,13 @@ macro_rules! impl_datatype {
                 *accum += size_of::<$archived_datatype>();
             }
 
-            fn from_pointer(&self, pointer: *const u8, start_pointer: *const u8) -> DataTypeValue {
-                let current_pointer = advance_pointer_for_padding(
-                    pointer,
-                    start_pointer,
-                    size_of::<$archived_datatype>(),
-                );
-                let archived_ptr: *const $archived_datatype = current_pointer.cast();
-
-                $datatype_value(unsafe { (*archived_ptr) }.into())
-            }
-
-            fn advance_pointer_for_padding(
-                &self,
-                pointer: &mut *const u8,
-                start_pointer: *const u8,
-            ) {
-                *pointer = advance_pointer_for_padding(
-                    *pointer,
-                    start_pointer,
-                    size_of::<$archived_datatype>(),
-                );
-            }
-
-            fn advance_pointer(&self, pointer: &mut *const u8) {
-                *pointer = unsafe { pointer.add(size_of::<$archived_datatype>()) };
+            fn from_archived_bytes(&self, bytes: &[u8]) -> Result<DataTypeValue, DataDecodeError> {
+                let archived = rkyv::access::<$archived_datatype, rkyv::rancor::Error>(bytes)
+                    .map_err(|error| DataDecodeError::InvalidArchive {
+                        data_type: stringify!($datatype),
+                        message: error.to_string(),
+                    })?;
+                Ok($datatype_value((*archived).into()))
             }
         }
     };

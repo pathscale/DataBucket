@@ -7,6 +7,13 @@ struct StringU {
     pub u: u16,
 }
 
+#[derive(SizeMeasure, Archive, Serialize)]
+enum FixedState {
+    Idle,
+    Running,
+    Complete,
+}
+
 #[test]
 fn test_string_u16() {
     let s = StringU {
@@ -17,4 +24,14 @@ fn test_string_u16() {
         s.aligned_size(),
         rkyv::to_bytes::<rkyv::rancor::Error>(&s).unwrap().len()
     )
+}
+
+#[test]
+fn test_fieldless_enum_size() {
+    for state in [FixedState::Idle, FixedState::Running, FixedState::Complete] {
+        assert_eq!(
+            state.aligned_size(),
+            rkyv::to_bytes::<rkyv::rancor::Error>(&state).unwrap().len()
+        );
+    }
 }

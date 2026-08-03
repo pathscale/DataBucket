@@ -21,7 +21,7 @@ where
         Self {
             records: BTreeMap::new(),
             empty_pages: vec![],
-            estimated_size: usize::default().aligned_size() + 12,
+            estimated_size: <usize as SizeMeasurable>::default_aligned_size() + 12,
         }
     }
 }
