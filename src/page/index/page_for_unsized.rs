@@ -16,14 +16,12 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use crate::page::index::IndexPageUtility;
 use crate::page::PageId;
 use crate::{align8, VariableSizeMeasurable};
-use crate::{
-    seek_to_page_start, DefaultSizeMeasurable, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE,
-};
+use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE};
 use crate::{Link, Persistable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct UnsizedIndexPage<
-    T: DefaultSizeMeasurable + VariableSizeMeasurable,
+    T: Default + SizeMeasurable + VariableSizeMeasurable,
     const DATA_LENGTH: u32,
 > {
     pub slots_size: u16,
@@ -39,7 +37,7 @@ pub struct UnsizedIndexPage<
     Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Persistable,
 )]
 #[persistable(by_parts, unsized_gens)]
-pub struct UnsizedIndexPageUtility<T: DefaultSizeMeasurable + VariableSizeMeasurable> {
+pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable + VariableSizeMeasurable> {
     pub slots_size: u16,
     pub node_id_size: u16,
     pub node_id: IndexValue<T>,
@@ -48,7 +46,7 @@ pub struct UnsizedIndexPageUtility<T: DefaultSizeMeasurable + VariableSizeMeasur
     pub slots: Vec<(u32, u16)>,
 }
 
-impl<T: DefaultSizeMeasurable + VariableSizeMeasurable> UnsizedIndexPageUtility<T> {
+impl<T: Default + SizeMeasurable + VariableSizeMeasurable> UnsizedIndexPageUtility<T> {
     pub fn update_node_id(&mut self, node_id: IndexValue<T>) -> eyre::Result<()> {
         self.node_id_size = node_id.aligned_size() as u16;
         self.node_id = node_id;
@@ -57,8 +55,8 @@ impl<T: DefaultSizeMeasurable + VariableSizeMeasurable> UnsizedIndexPageUtility<
     }
 }
 
-impl<T: DefaultSizeMeasurable + VariableSizeMeasurable, const DATA_LENGTH: u32> IndexPageUtility<T>
-    for UnsizedIndexPage<T, DATA_LENGTH>
+impl<T: Default + SizeMeasurable + VariableSizeMeasurable, const DATA_LENGTH: u32>
+    IndexPageUtility<T> for UnsizedIndexPage<T, DATA_LENGTH>
 where
     T: Archive
         + Debug

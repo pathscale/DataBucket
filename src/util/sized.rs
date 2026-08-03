@@ -38,20 +38,23 @@ pub fn align_vec<const ALIGNMENT: usize>(mut v: AlignedVec<ALIGNMENT>) -> Aligne
 pub trait SizeMeasurable {
     /// Returns approximate size of the object archiving via [`rkyv`].
     fn aligned_size(&self) -> usize;
+
+    /// Returns the archived size of this type's default value.
+    ///
+    /// The default implementation constructs `Self::default()`. Types with an
+    /// expensive default may override this method in their `SizeMeasurable`
+    /// implementation and return the size directly.
+    fn default_aligned_size() -> usize
+    where
+        Self: Default,
+    {
+        Self::default().aligned_size()
+    }
+
     fn align() -> Option<usize> {
         None
     }
 }
-
-/// A [`SizeMeasurable`] type whose default value can be measured without
-/// constructing it at each call site.
-pub trait DefaultSizeMeasurable: Default + SizeMeasurable {
-    fn default_aligned_size() -> usize {
-        Self::default().aligned_size()
-    }
-}
-
-impl<T> DefaultSizeMeasurable for T where T: Default + SizeMeasurable {}
 
 macro_rules! size_measurable_for_sized {
     ($($t:ident),+) => {
@@ -161,10 +164,10 @@ impl SizeMeasurable for String {
 
 impl<T> SizeMeasurable for Vec<T>
 where
-    T: DefaultSizeMeasurable,
+    T: Default + SizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
-        let val_size = T::default_aligned_size();
+        let val_size = <T as SizeMeasurable>::default_aligned_size();
         let vec_content_size = if val_size == 2 {
             2
         } else if val_size == 4 {
@@ -241,25 +244,25 @@ impl VariableSizeMeasurable for String {
 impl<K, L> VariableSizeMeasurable for indexset::core::pair::Pair<K, L>
 where
     K: VariableSizeMeasurable,
-    L: DefaultSizeMeasurable,
+    L: Default + SizeMeasurable,
 {
     fn aligned_size(length: usize) -> usize {
-        align(L::default_aligned_size() + K::aligned_size(length))
+        align(<L as SizeMeasurable>::default_aligned_size() + K::aligned_size(length))
     }
 }
 impl<K, L> VariableSizeMeasurable for indexset::core::multipair::MultiPair<K, L>
 where
     K: VariableSizeMeasurable,
-    L: DefaultSizeMeasurable,
+    L: Default + SizeMeasurable,
 {
     fn aligned_size(length: usize) -> usize {
-        align(L::default_aligned_size() + K::aligned_size(length))
+        align(<L as SizeMeasurable>::default_aligned_size() + K::aligned_size(length))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::util::sized::{DefaultSizeMeasurable, SizeMeasurable};
+    use crate::util::sized::SizeMeasurable;
     use crate::{IndexValue, Link};
     use rkyv::to_bytes;
     use uuid::Uuid;
@@ -282,7 +285,36 @@ mod test {
 
     #[test]
     fn default_size_helper_matches_previous_expression() {
-        assert_eq!(u64::default_aligned_size(), u64::default().aligned_size());
+        assert_eq!(
+            <u64 as SizeMeasurable>::default_aligned_size(),
+            u64::default().aligned_size()
+        );
+    }
+
+    #[test]
+    fn type_can_override_default_size_without_constructing_default() {
+        struct ExpensiveDefault;
+
+        impl Default for ExpensiveDefault {
+            fn default() -> Self {
+                panic!("the sizing override must not construct the default value")
+            }
+        }
+
+        impl SizeMeasurable for ExpensiveDefault {
+            fn aligned_size(&self) -> usize {
+                64
+            }
+
+            fn default_aligned_size() -> usize {
+                64
+            }
+        }
+
+        assert_eq!(
+            <ExpensiveDefault as SizeMeasurable>::default_aligned_size(),
+            64
+        );
     }
 
     #[test]

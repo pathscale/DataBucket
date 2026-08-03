@@ -11,7 +11,7 @@ use crate::size_measure::parser::{ParsedItem, Parser};
 
 pub fn expand(input: &TokenStream) -> syn::Result<TokenStream> {
     let impl_def = match Parser::parse(input)? {
-        ParsedItem::Struct(struct_def) => Generator { struct_def }.gen_impl(),
+        ParsedItem::Struct(struct_def) => Generator { struct_def }.gen_impl()?,
         ParsedItem::Enum(enum_def) => EnumGenerator { enum_def }.gen_impl()?,
     };
 

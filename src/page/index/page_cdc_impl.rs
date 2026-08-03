@@ -11,9 +11,9 @@ use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::{DefaultSizeMeasurable, IndexPage, IndexValue, Link};
+use crate::{IndexPage, IndexValue, Link, SizeMeasurable};
 
-impl<T: DefaultSizeMeasurable> IndexPage<T>
+impl<T: Default + SizeMeasurable> IndexPage<T>
 where
     T: Archive
         + Debug

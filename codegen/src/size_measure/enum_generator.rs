@@ -32,9 +32,10 @@ impl EnumGenerator {
             impl SizeMeasurable for #enum_ident
             where
                 #enum_ident: rkyv::Archive,
+                <#enum_ident as rkyv::Archive>::Archived: Sized,
             {
                 fn aligned_size(&self) -> usize {
-                    std::mem::size_of::<<Self as rkyv::Archive>::Archived>()
+                    std::mem::size_of::<<#enum_ident as rkyv::Archive>::Archived>()
                 }
             }
         })
