@@ -13,14 +13,15 @@ use crate::{
     DataPage, GeneralPage, Link, Persistable, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
 };
 
-/// Returned when a page's serialized inner data does not fit the page slot:
-/// writing it would spill past the [`PAGE_SIZE`] boundary into the
-/// neighboring page.
+/// Returned when a write into a page would not fit the page slot: letting
+/// it through would spill past a [`PAGE_SIZE`] boundary and corrupt a
+/// neighboring page (or, for tail-first writes, this page's own header).
 #[derive(Debug)]
 pub struct PageOverflowError {
-    /// The page whose serialized form is over budget.
+    /// The page whose write is over budget.
     pub page_id: PageId,
-    /// Serialized length of the page's inner data.
+    /// Inner-page bytes the write needs (for slot writes, where the write
+    /// would end within the slot).
     pub data_length: usize,
     /// The slot budget for inner data ([`INNER_PAGE_SIZE`]).
     pub capacity: usize,
@@ -30,7 +31,7 @@ impl std::fmt::Display for PageOverflowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "page {} serialized to {} bytes, exceeding the {}-byte page slot",
+            "page {} write needs {} bytes, exceeding the {}-byte page slot",
             self.page_id, self.data_length, self.capacity
         )
     }

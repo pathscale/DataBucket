@@ -18,9 +18,10 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::page::index::IndexPageUtility;
-use crate::page::{IndexValue, PageId};
+use crate::page::{IndexValue, PageId, PageOverflowError};
 use crate::{
     align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE,
+    INNER_PAGE_SIZE,
 };
 
 pub fn get_index_page_size_from_data_length<T>(length: usize) -> usize
@@ -202,6 +203,27 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         Self::read_value(file).await
     }
 
+    /// Rejects a slot write whose byte range would leave the page, so a bad
+    /// `value_index` (or an oversized serialized value) corrupts nothing.
+    ///
+    /// `offset` is relative to the page start and already includes the
+    /// general header.
+    fn check_value_write_bounds(
+        page_id: PageId,
+        offset: usize,
+        value_length: usize,
+    ) -> Result<(), PageOverflowError> {
+        let write_end_in_slot = offset + value_length - GENERAL_HEADER_SIZE;
+        if write_end_in_slot > INNER_PAGE_SIZE {
+            return Err(PageOverflowError {
+                page_id,
+                data_length: write_end_in_slot,
+                capacity: INNER_PAGE_SIZE,
+            });
+        }
+        Ok(())
+    }
+
     fn get_value_offset(size: usize, value_index: usize) -> usize
     where
         T: Default + SizeMeasurable,
@@ -238,11 +260,11 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
             rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
         >,
     {
-        seek_to_page_start(file, page_id.0).await?;
-
         let offset = Self::get_value_offset(size, value_index as usize);
-        file.seek(SeekFrom::Current(offset as i64)).await?;
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
+        Self::check_value_write_bounds(page_id, offset, bytes.len())?;
+        seek_to_page_start(file, page_id.0).await?;
+        file.seek(SeekFrom::Current(offset as i64)).await?;
         file.write_all(bytes.as_slice()).await?;
 
         if value_index != size as u16 - 1 {
@@ -278,12 +300,12 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
             rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
         >,
     {
-        seek_to_page_start(file, page_id.0).await?;
-
         let offset = Self::get_value_offset(size, value_index as usize);
-        file.seek(SeekFrom::Current(offset as i64)).await?;
         let value = IndexValue::<T>::default();
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
+        Self::check_value_write_bounds(page_id, offset, bytes.len())?;
+        seek_to_page_start(file, page_id.0).await?;
+        file.seek(SeekFrom::Current(offset as i64)).await?;
         file.write_all(bytes.as_slice()).await?;
 
         Ok(())
@@ -389,6 +411,82 @@ mod tests {
         assert_eq!(new_page.size, page.size);
         assert_eq!(new_page.slots, page.slots);
         assert_eq!(new_page.index_values, page.index_values);
+    }
+
+    #[tokio::test]
+    async fn persist_and_remove_value_reject_writes_past_the_page_slot() {
+        use super::{IndexPageUtility, PageOverflowError, SizedIndexPageUtility};
+
+        let path = std::env::temp_dir().join(format!(
+            "data_bucket_slot_write_bounds_{}.wt",
+            std::process::id()
+        ));
+        let mut file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .await
+            .unwrap();
+
+        let value = IndexValue::<u64> {
+            key: 7,
+            link: Default::default(),
+        };
+
+        // An in-bounds slot write works.
+        IndexPage::<u64>::persist_value(&mut file, 1.into(), 4, value.clone(), 3)
+            .await
+            .unwrap();
+        let length_after_valid_write = file.metadata().await.unwrap().len();
+
+        // A value index whose slot lies past the page must be rejected
+        // before anything is written.
+        let err = IndexPage::<u64>::persist_value(&mut file, 1.into(), 4, value, 2000)
+            .await
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<PageOverflowError>().is_some(),
+            "expected PageOverflowError, got: {err}"
+        );
+
+        let err = IndexPage::<u64>::remove_value(&mut file, 1.into(), 4, 2000)
+            .await
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<PageOverflowError>().is_some(),
+            "expected PageOverflowError, got: {err}"
+        );
+
+        // A utility larger than the page slot must be rejected too.
+        let utility = SizedIndexPageUtility::<u64> {
+            size: 0,
+            node_id: IndexValue::default(),
+            current_index: 0,
+            current_length: 0,
+            slots: vec![0u16; 20_000],
+        };
+        let err = <IndexPage<u64> as IndexPageUtility<u64>>::persist_index_page_utility(
+            &mut file,
+            1.into(),
+            utility,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.downcast_ref::<PageOverflowError>().is_some(),
+            "expected PageOverflowError, got: {err}"
+        );
+
+        // Nothing was written by the rejected operations.
+        assert_eq!(
+            file.metadata().await.unwrap().len(),
+            length_after_valid_write
+        );
+
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

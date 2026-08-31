@@ -7,9 +7,10 @@ use rkyv::{Archive, Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
+use crate::page::PageOverflowError;
 use crate::{
     align, align_to, seek_to_page_start, Link, Persistable, SizeMeasurable, VariableSizeMeasurable,
-    GENERAL_HEADER_SIZE,
+    GENERAL_HEADER_SIZE, INNER_PAGE_SIZE,
 };
 
 mod page;
@@ -40,10 +41,21 @@ pub trait IndexPageUtility<T> {
         utility: Self::Utility,
     ) -> impl std::future::Future<Output = eyre::Result<()>> + Send {
         async move {
+            let bytes = utility.as_bytes();
+            let utility_length = bytes.as_ref().len();
+            // An oversized utility must fail here, in its own persist,
+            // instead of writing past the page slot into the neighbor page.
+            if utility_length > INNER_PAGE_SIZE {
+                return Err(eyre::Report::new(PageOverflowError {
+                    page_id,
+                    data_length: utility_length,
+                    capacity: INNER_PAGE_SIZE,
+                }));
+            }
             seek_to_page_start(file, page_id.0).await?;
             file.seek(SeekFrom::Current(GENERAL_HEADER_SIZE as i64))
                 .await?;
-            file.write_all(utility.as_bytes().as_ref()).await?;
+            file.write_all(bytes.as_ref()).await?;
             Ok(())
         }
     }

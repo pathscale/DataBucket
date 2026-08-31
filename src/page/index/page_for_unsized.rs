@@ -14,9 +14,9 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::page::index::IndexPageUtility;
-use crate::page::PageId;
+use crate::page::{PageId, PageOverflowError};
 use crate::{align8, VariableSizeMeasurable};
-use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE};
+use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE};
 use crate::{Link, Persistable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -212,15 +212,25 @@ where
                 rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
             >,
     {
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
+        let offset = current_offset as u64 + bytes.len() as u64;
+        // Values fill the page tail-first, so `offset` counts back from the
+        // page end: once it passes the inner-page budget the write would
+        // land in this page's header, or before it in the previous page.
+        if offset > INNER_PAGE_SIZE as u64 {
+            return Err(eyre::Report::new(PageOverflowError {
+                page_id,
+                data_length: offset as usize,
+                capacity: INNER_PAGE_SIZE,
+            }));
+        }
+
         // We seek to page's end and will write values from tail.
         seek_to_page_start(file, page_id.0 + 1).await?;
-
-        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        let offset = current_offset + bytes.len() as u32;
         file.seek(SeekFrom::Current(-(offset as i64))).await?;
         file.write_all(bytes.as_slice()).await?;
 
-        Ok(offset)
+        Ok(offset as u32)
     }
 
     async fn read_value(file: &mut File, len: u16) -> eyre::Result<IndexValue<T>>
@@ -376,7 +386,74 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexValue, Link, Persistable, UnsizedIndexPage};
+    use crate::page::PageOverflowError;
+    use crate::{IndexValue, Link, Persistable, UnsizedIndexPage, INNER_PAGE_SIZE};
+
+    #[tokio::test]
+    async fn persist_value_rejects_writes_leaving_the_page_slot() {
+        let path = std::env::temp_dir().join(format!(
+            "data_bucket_unsized_write_bounds_{}.wt",
+            std::process::id()
+        ));
+        let mut file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .await
+            .unwrap();
+
+        let value = IndexValue::<String> {
+            key: "tail_first_value".to_string(),
+            link: Default::default(),
+        };
+
+        // An in-bounds tail-first write works.
+        UnsizedIndexPage::<String, 1024>::persist_value(&mut file, 1.into(), 0, value.clone())
+            .await
+            .unwrap();
+        let length_after_valid_write = file.metadata().await.unwrap().len();
+
+        // A current offset at the inner budget leaves no room: the write
+        // would land in the page header (or the previous page).
+        let err = UnsizedIndexPage::<String, 1024>::persist_value(
+            &mut file,
+            1.into(),
+            INNER_PAGE_SIZE as u32,
+            value.clone(),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.downcast_ref::<PageOverflowError>().is_some(),
+            "expected PageOverflowError, got: {err}"
+        );
+
+        // A huge current offset used to wrap the u32 arithmetic and seek
+        // far outside the page; it must be rejected the same way.
+        let err = UnsizedIndexPage::<String, 1024>::persist_value(
+            &mut file,
+            1.into(),
+            u32::MAX - 4,
+            value,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.downcast_ref::<PageOverflowError>().is_some(),
+            "expected PageOverflowError, got: {err}"
+        );
+
+        // Nothing was written by the rejected operations.
+        assert_eq!(
+            file.metadata().await.unwrap().len(),
+            length_after_valid_write
+        );
+
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
+    }
 
     #[test]
     fn to_bytes_and_back() {
