@@ -18,8 +18,9 @@ pub use page::{
     parse_data_pages_batch, parse_general_header_by_index, parse_page, parse_pages_batch,
     persist_page, persist_pages_batch, seek_by_link, seek_to_page_start, update_at, DataPage,
     GeneralHeader, GeneralPage, IndexPage, IndexPageUtility, IndexValue, Interval, PageType,
-    SpaceInfoPage, TableOfContentsPage, UnsizedIndexPage, UnsizedIndexPageUtility, DATA_VERSION,
-    GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
+    SpaceInfoPage, TableOfContentsOverflowError, TableOfContentsPage, UnsizedIndexPage,
+    UnsizedIndexPageUtility, DATA_VERSION, EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE, GENERAL_HEADER_SIZE,
+    INNER_PAGE_SIZE, PAGE_SIZE,
 };
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use space::Id as SpaceId;

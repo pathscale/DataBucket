@@ -22,7 +22,9 @@ use crate::page::PageId;
 
 pub use page::{get_index_page_size_from_data_length, IndexPage};
 pub use page_for_unsized::{UnsizedIndexPage, UnsizedIndexPageUtility};
-pub use table_of_contents_page::TableOfContentsPage;
+pub use table_of_contents_page::{
+    TableOfContentsOverflowError, TableOfContentsPage, EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE,
+};
 
 pub trait IndexPageUtility<T> {
     type Utility: Persistable + Send + Sync;
