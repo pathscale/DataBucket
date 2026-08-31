@@ -439,6 +439,8 @@ mod tests {
         IndexPage::<u64>::persist_value(&mut file, 1.into(), 4, value.clone(), 3)
             .await
             .unwrap();
+        // tokio's File buffers writes; flush so metadata() sees them.
+        tokio::io::AsyncWriteExt::flush(&mut file).await.unwrap();
         let length_after_valid_write = file.metadata().await.unwrap().len();
 
         // A value index whose slot lies past the page must be rejected

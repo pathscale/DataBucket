@@ -413,6 +413,8 @@ mod test {
         UnsizedIndexPage::<String, 1024>::persist_value(&mut file, 1.into(), 0, value.clone())
             .await
             .unwrap();
+        // tokio's File buffers writes; flush so metadata() sees them.
+        tokio::io::AsyncWriteExt::flush(&mut file).await.unwrap();
         let length_after_valid_write = file.metadata().await.unwrap().len();
 
         // A current offset at the inner budget leaves no room: the write

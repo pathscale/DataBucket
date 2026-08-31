@@ -631,6 +631,8 @@ mod tests {
 
         // The boundary page must have been written past 4 GiB (the file is
         // sparse, so this stays cheap), not wrapped back onto the first pages.
+        // tokio's File buffers writes; flush so metadata() sees them.
+        tokio::io::AsyncWriteExt::flush(&mut file).await.unwrap();
         let file_length = file.metadata().await.unwrap().len();
         assert!(file_length > page_start_offset(FIRST_PAGE_PAST_4_GIB));
 
