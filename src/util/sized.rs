@@ -22,6 +22,36 @@ pub const fn align8(len: usize) -> usize {
     }
 }
 
+/// Rounds `len` up to a multiple of `alignment`.
+pub const fn align_to(len: usize, alignment: usize) -> usize {
+    if len.is_multiple_of(alignment) {
+        len
+    } else {
+        (len / alignment + 1) * alignment
+    }
+}
+
+/// The widest 8-or-more-byte alignment claimed by the two member types, if
+/// any.
+///
+/// rkyv pads a compound value out to its widest member alignment (8 for
+/// `u64`-likes, 16 for `u128`/`i128`), so compound size models must round
+/// to the real member alignment. Rounding a 16-aligned member to only 8
+/// under-counts every archived record by up to 8 bytes.
+fn wide_member_align<T1, T2>() -> Option<usize>
+where
+    T1: SizeMeasurable,
+    T2: SizeMeasurable,
+{
+    let mut wide = None;
+    for member_align in [T1::align(), T2::align()].into_iter().flatten() {
+        if member_align % 8 == 0 && Some(member_align) > wide {
+            wide = Some(member_align);
+        }
+    }
+    wide
+}
+
 pub fn align_vec<const ALIGNMENT: usize>(mut v: AlignedVec<ALIGNMENT>) -> AlignedVec<ALIGNMENT> {
     if v.len() != align(v.len()) {
         let count = align(v.len()) - v.len();
@@ -123,31 +153,15 @@ where
     T2: SizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
-        if let Some(align) = T1::align() {
-            if align % 8 == 0 {
-                return align8(self.0.aligned_size() + self.1.aligned_size());
-            }
+        let len = self.0.aligned_size() + self.1.aligned_size();
+        match wide_member_align::<T1, T2>() {
+            Some(member_align) => align_to(len, member_align),
+            None => align(len),
         }
-        if let Some(align) = T2::align() {
-            if align % 8 == 0 {
-                return align8(self.0.aligned_size() + self.1.aligned_size());
-            }
-        }
-        align(self.0.aligned_size() + self.1.aligned_size())
     }
 
     fn align() -> Option<usize> {
-        if let Some(align) = T1::align() {
-            if align % 8 == 0 {
-                return Some(8);
-            }
-        }
-        if let Some(align) = T2::align() {
-            if align % 8 == 0 {
-                return Some(8);
-            }
-        }
-        None
+        wide_member_align::<T1, T2>()
     }
 }
 
@@ -356,6 +370,58 @@ mod test {
             vec.aligned_size(),
             rkyv::to_bytes::<rkyv::rancor::Error>(&vec).unwrap().len()
         )
+    }
+
+    #[test]
+    fn test_16_aligned_members_measure_like_rkyv() {
+        // rkyv pads compounds out to 16 for u128/i128 members; the model
+        // used to round to 8 and under-count every archived record.
+        let t = (u128::MAX, Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let t = (u128::MAX, u64::MAX);
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        let t = (i128::MAX, Link::default());
+        assert_eq!(
+            t.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&t).unwrap().len()
+        );
+        assert_eq!(<(u128, Link) as SizeMeasurable>::align(), Some(16));
+        assert_eq!(<(u128, u64) as SizeMeasurable>::align(), Some(16));
+        assert_eq!(<(u64, Link) as SizeMeasurable>::align(), Some(8));
+
+        let v = IndexValue {
+            key: u128::MAX,
+            link: Link::default(),
+        };
+        assert_eq!(
+            v.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&v).unwrap().len()
+        );
+        let v = IndexValue {
+            key: (u128::MAX, u64::MAX),
+            link: Link::default(),
+        };
+        assert_eq!(
+            v.aligned_size(),
+            to_bytes::<rkyv::rancor::Error>(&v).unwrap().len()
+        );
+
+        // The archived element stride of a vec must match too, so per-record
+        // accounting stays exact for pages of such records.
+        let vec = vec![(u128::MAX, Link::default()); 100];
+        let one = (u128::MAX, Link::default()).aligned_size();
+        let bytes = to_bytes::<rkyv::rancor::Error>(&vec).unwrap().len();
+        let bytes_two_hundred =
+            to_bytes::<rkyv::rancor::Error>(&vec![(u128::MAX, Link::default()); 200])
+                .unwrap()
+                .len();
+        assert_eq!(bytes_two_hundred - bytes, 100 * one);
     }
 
     #[test]

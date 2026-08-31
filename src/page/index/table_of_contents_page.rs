@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::page::PageId;
-use crate::{align, align8, Persistable, SizeMeasurable, INNER_PAGE_SIZE};
+use crate::{align, align_to, Persistable, SizeMeasurable, INNER_PAGE_SIZE};
 
 /// Serialized size of a [`TableOfContentsPage`] with no records and no
 /// empty pages: the `estimated_size` field itself plus the two empty
@@ -155,7 +155,9 @@ where
         let len = key.aligned_size() + PageId::default().0.aligned_size();
         if let Some(key_align) = T::align() {
             if key_align % 8 == 0 {
-                return align8(len);
+                // rkyv pads the archived record out to the key's real
+                // alignment (16 for u128-likes), so round to it, not to 8.
+                return align_to(len, key_align);
             }
         }
         align(len)
@@ -344,6 +346,90 @@ mod test {
             page_id: 1.into(),
             offset,
             length: 32,
+        }
+    }
+
+    #[test]
+    fn test_try_insert_bounds_real_serialized_size_for_16_aligned_keys() {
+        // Regression for the review blocker: with u128-family keys the size
+        // model under-counted every record by 8 bytes, so try_insert kept
+        // accepting records until the real archive was hundreds of bytes
+        // past the page slot.
+        let mut toc_page = TableOfContentsPage::<u128>::default();
+        let mut i = 0u128;
+        while toc_page.try_insert(i, 1.into()).is_ok() {
+            i += 1;
+            assert!(i < 4096, "the page must eventually report itself full");
+        }
+        let serialized = toc_page.as_bytes().as_ref().len();
+        assert_eq!(serialized, toc_page.estimated_size());
+        assert!(serialized <= INNER_PAGE_SIZE);
+
+        let mut toc_page = TableOfContentsPage::<(u128, Link)>::default();
+        let mut i = 0u128;
+        while toc_page.try_insert((i, link(i as u32)), 1.into()).is_ok() {
+            i += 1;
+            assert!(i < 4096, "the page must eventually report itself full");
+        }
+        let serialized = toc_page.as_bytes().as_ref().len();
+        assert_eq!(serialized, toc_page.estimated_size());
+        assert!(serialized <= INNER_PAGE_SIZE);
+    }
+
+    #[test]
+    fn test_estimated_size_is_an_upper_bound_under_adversarial_churn() {
+        // Property-style sweep with a deterministic LCG: string keys of
+        // adversarial lengths (the String model rounds to 4 bytes, so it may
+        // over-estimate, never under), mixed inserts, removals and key
+        // updates. The safety invariant of the capacity checks is
+        // serialized <= estimated at every step; the approximation slack
+        // stays below 4 bytes per record.
+        let mut state = 0x2545F4914F6CDD1Du64;
+        let mut next = move || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as u32
+        };
+
+        let mut toc_page = TableOfContentsPage::<(String, Link)>::default();
+        let mut keys: Vec<(String, Link)> = vec![];
+        let mut record_count = 0usize;
+        for step in 0..600u32 {
+            let op = next() % 4;
+            if op < 2 || keys.is_empty() {
+                let len = (next() % 48) as usize;
+                let key = (format!("{step:0>len$}"), link(step));
+                if toc_page.try_insert(key.clone(), (step + 1).into()).is_ok() {
+                    keys.push(key);
+                    record_count += 1;
+                }
+            } else if op == 2 {
+                let key = keys.swap_remove((next() as usize) % keys.len());
+                toc_page.remove(&key);
+                record_count -= 1;
+            } else {
+                let old = keys.swap_remove((next() as usize) % keys.len());
+                let len = (next() % 48) as usize;
+                let new_key = (format!("{step:0>len$}"), link(step));
+                match toc_page.try_update_key(&old, new_key.clone()) {
+                    Ok(true) => keys.push(new_key),
+                    Ok(false) => unreachable!("old key is always present"),
+                    Err(_) => keys.push(old),
+                }
+            }
+
+            let serialized = toc_page.as_bytes().as_ref().len();
+            let estimated = toc_page.estimated_size();
+            assert!(
+                serialized <= estimated,
+                "under-estimate at step {step}: serialized {serialized} > estimated {estimated}"
+            );
+            assert!(
+                estimated - serialized <= 4 * (record_count + 2),
+                "slack blew past the documented bound at step {step}: \
+                 serialized {serialized}, estimated {estimated}, records {record_count}"
+            );
         }
     }
 

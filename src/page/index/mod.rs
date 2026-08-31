@@ -8,7 +8,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 use crate::{
-    align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, VariableSizeMeasurable,
+    align, align_to, seek_to_page_start, Link, Persistable, SizeMeasurable, VariableSizeMeasurable,
     GENERAL_HEADER_SIZE,
 };
 
@@ -64,12 +64,15 @@ where
     T: SizeMeasurable,
 {
     fn aligned_size(&self) -> usize {
-        if let Some(align) = T::align() {
-            if align % 8 == 0 {
-                return align8(self.key.aligned_size() + self.link.aligned_size());
+        let len = self.key.aligned_size() + self.link.aligned_size();
+        if let Some(key_align) = T::align() {
+            if key_align % 8 == 0 {
+                // rkyv pads the archived value out to the key's real
+                // alignment (16 for u128-likes), so round to it, not to 8.
+                return align_to(len, key_align);
             }
         }
-        align(self.key.aligned_size() + self.link.aligned_size())
+        align(len)
     }
 }
 
