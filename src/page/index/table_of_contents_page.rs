@@ -114,8 +114,12 @@ where
     where
         T: SizeMeasurable + Clone,
     {
-        self.estimated_size += Self::record_size(&val);
-        let _ = self.records.insert(val, page_id);
+        let record_size = Self::record_size(&val);
+        // Inserting over an existing key replaces its PageId in place, so
+        // the serialized page does not grow.
+        if self.records.insert(val, page_id).is_none() {
+            self.estimated_size += record_size;
+        }
     }
 
     pub fn pop_empty_page(&mut self) -> Option<PageId>
@@ -240,6 +244,23 @@ mod test {
 
         // Reusing the empty page gives that space back.
         assert_eq!(toc_page.pop_empty_page(), Some(6.into()));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+    }
+
+    #[test]
+    fn test_insert_over_existing_key_keeps_estimated_size_exact() {
+        let mut toc_page = TableOfContentsPage::<(u32, Link)>::default();
+        toc_page.insert((1, link(0)), 6.into());
+        let size_after_first = toc_page.estimated_size();
+
+        // Re-pointing the same key to another page replaces the record in
+        // place; it used to be counted as a second record.
+        toc_page.insert((1, link(0)), 7.into());
+        assert_eq!(toc_page.get(&(1, link(0))), Some(7.into()));
+        assert_eq!(toc_page.estimated_size(), size_after_first);
         assert_eq!(
             toc_page.as_bytes().as_ref().len(),
             toc_page.estimated_size()
