@@ -125,6 +125,9 @@ where
         T: SizeMeasurable,
     {
         let id = self.remove_without_record(val);
+        // The removed page is recorded as empty, which grows the serialized
+        // `empty_pages` list by one `PageId`.
+        self.estimated_size += id.aligned_size();
         self.empty_pages.push(id);
         id
     }
@@ -134,7 +137,6 @@ where
         T: SizeMeasurable,
     {
         self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
-        self.estimated_size += PageId::default().0.aligned_size();
 
         self.records
             .remove(val)
@@ -173,6 +175,58 @@ where
 #[cfg(test)]
 mod test {
     use crate::{Link, Persistable, TableOfContentsPage};
+
+    fn link(offset: u32) -> Link {
+        Link {
+            page_id: 1.into(),
+            offset,
+            length: 32,
+        }
+    }
+
+    #[test]
+    fn test_remove_without_record_keeps_estimated_size_exact() {
+        let mut toc_page = TableOfContentsPage::<(u32, Link)>::default();
+        let empty_size = toc_page.as_bytes().as_ref().len();
+        assert_eq!(empty_size, toc_page.estimated_size());
+
+        toc_page.insert((1, link(0)), 6.into());
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+
+        // No empty-page record is produced, so the size must return exactly
+        // to the empty-page baseline. It used to stay one PageId too big.
+        toc_page.remove_without_record(&(1, link(0)));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+        assert_eq!(toc_page.estimated_size(), empty_size);
+    }
+
+    #[test]
+    fn test_remove_keeps_estimated_size_exact() {
+        let mut toc_page = TableOfContentsPage::<(u32, Link)>::default();
+        toc_page.insert((1, link(0)), 6.into());
+        toc_page.insert((2, link(64)), 7.into());
+
+        // `remove` records the freed page in `empty_pages`, which itself
+        // takes serialized space.
+        toc_page.remove(&(1, link(0)));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+
+        // Reusing the empty page gives that space back.
+        assert_eq!(toc_page.pop_empty_page(), Some(6.into()));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+    }
 
     #[test]
     fn test_sizes() {
