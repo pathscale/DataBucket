@@ -165,12 +165,28 @@ where
             .expect("value should be available if remove is called")
     }
 
-    pub fn update_key(&mut self, old_key: &T, new_key: T) -> Option<()> {
-        if let Some(id) = self.records.remove(old_key) {
-            self.records.insert(new_key, id);
-            return Some(());
+    /// Re-keys the record at `old_key` to `new_key`, maintaining
+    /// `estimated_size` for the size difference between the two keys.
+    ///
+    /// Returns [`None`] (leaving the page untouched) when `old_key` is not
+    /// present.
+    ///
+    /// This variant performs no capacity check: a key that grows past the
+    /// page slot is accepted and only reported through `estimated_size`.
+    /// Use [`Self::try_update_key`] when the caller can relocate instead.
+    pub fn update_key(&mut self, old_key: &T, new_key: T) -> Option<()>
+    where
+        T: SizeMeasurable,
+    {
+        let id = self.records.remove(old_key)?;
+        self.estimated_size -= Self::record_size(old_key);
+        let new_record_size = Self::record_size(&new_key);
+        // If `new_key` was already present, its record is replaced in place
+        // and the serialized page does not grow.
+        if self.records.insert(new_key, id).is_none() {
+            self.estimated_size += new_record_size;
         }
-        None
+        Some(())
     }
 
     pub fn contains(&self, val: &T) -> bool {
@@ -288,6 +304,115 @@ mod test {
             toc_page.estimated_size()
         );
         assert_eq!(toc_page.estimated_size(), empty_size);
+    }
+
+    #[test]
+    fn test_update_key_keeps_estimated_size_exact() {
+        fn assert_exact(toc_page: &TableOfContentsPage<(String, Link)>) {
+            assert_eq!(
+                toc_page.as_bytes().as_ref().len(),
+                toc_page.estimated_size()
+            );
+        }
+
+        let mut toc_page = TableOfContentsPage::<(String, Link)>::default();
+        toc_page.insert(("key_0001".to_string(), link(0)), 6.into());
+        assert_exact(&toc_page);
+
+        // Growing the key must grow estimated_size with it; it used not to
+        // be accounted at all.
+        let grown = "key_0001_grown_by_a_long_suffix_0001".to_string();
+        toc_page
+            .update_key(&("key_0001".to_string(), link(0)), (grown.clone(), link(0)))
+            .unwrap();
+        assert_exact(&toc_page);
+
+        // Shrinking it must give the space back.
+        toc_page
+            .update_key(&(grown, link(0)), ("key_0001".to_string(), link(0)))
+            .unwrap();
+        assert_exact(&toc_page);
+
+        // Updating onto an already existing key replaces that record in
+        // place.
+        toc_page.insert(("key_0002".to_string(), link(64)), 7.into());
+        toc_page
+            .update_key(
+                &("key_0001".to_string(), link(0)),
+                ("key_0002".to_string(), link(64)),
+            )
+            .unwrap();
+        assert_exact(&toc_page);
+        assert_eq!(
+            toc_page.get(&("key_0002".to_string(), link(64))),
+            Some(6.into())
+        );
+
+        // A missing old key leaves the page untouched.
+        let before = toc_page.estimated_size();
+        assert!(toc_page
+            .update_key(
+                &("missing".to_string(), link(0)),
+                ("whatever".to_string(), link(0)),
+            )
+            .is_none());
+        assert_eq!(toc_page.estimated_size(), before);
+        assert_exact(&toc_page);
+    }
+
+    #[test]
+    // Key strings are chosen with len % 4 == 0 (or <= 8): the String size
+    // model in SizeMeasurable rounds each string to 4 bytes, which is the
+    // documented accuracy bound of estimated_size for other lengths.
+    fn test_estimated_size_stays_exact_across_churn() {
+        fn assert_exact(toc_page: &TableOfContentsPage<(String, Link)>) {
+            assert_eq!(
+                toc_page.as_bytes().as_ref().len(),
+                toc_page.estimated_size()
+            );
+        }
+
+        let mut toc_page = TableOfContentsPage::<(String, Link)>::default();
+
+        for i in 0..32u32 {
+            toc_page.insert((format!("key_{i:04}"), link(i)), (i + 1).into());
+            assert_exact(&toc_page);
+        }
+
+        // Grow half of the keys through updates.
+        for i in 0..16u32 {
+            toc_page
+                .update_key(
+                    &(format!("key_{i:04}"), link(i)),
+                    (format!("key_{i:04}_grown_by_a_long_suffix_"), link(i)),
+                )
+                .unwrap();
+            assert_exact(&toc_page);
+        }
+
+        // Shrink them back.
+        for i in 0..16u32 {
+            toc_page
+                .update_key(
+                    &(format!("key_{i:04}_grown_by_a_long_suffix_"), link(i)),
+                    (format!("key_{i:04}"), link(i)),
+                )
+                .unwrap();
+            assert_exact(&toc_page);
+        }
+
+        // Remove a mix, with and without empty-page records.
+        for i in 0..8u32 {
+            toc_page.remove(&(format!("key_{i:04}"), link(i)));
+            assert_exact(&toc_page);
+        }
+        for i in 8..16u32 {
+            toc_page.remove_without_record(&(format!("key_{i:04}"), link(i)));
+            assert_exact(&toc_page);
+        }
+        while toc_page.pop_empty_page().is_some() {
+            assert_exact(&toc_page);
+        }
     }
 
     #[test]
