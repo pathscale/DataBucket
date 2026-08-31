@@ -8,7 +8,35 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use super::SpaceInfoPage;
 use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
-use crate::{DataPage, GeneralPage, Link, Persistable, GENERAL_HEADER_SIZE, PAGE_SIZE};
+use crate::page::PageId;
+use crate::{
+    DataPage, GeneralPage, Link, Persistable, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
+};
+
+/// Returned when a page's serialized inner data does not fit the page slot:
+/// writing it would spill past the [`PAGE_SIZE`] boundary into the
+/// neighboring page.
+#[derive(Debug)]
+pub struct PageOverflowError {
+    /// The page whose serialized form is over budget.
+    pub page_id: PageId,
+    /// Serialized length of the page's inner data.
+    pub data_length: usize,
+    /// The slot budget for inner data ([`INNER_PAGE_SIZE`]).
+    pub capacity: usize,
+}
+
+impl std::fmt::Display for PageOverflowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "page {} serialized to {} bytes, exceeding the {}-byte page slot",
+            self.page_id, self.data_length, self.capacity
+        )
+    }
+}
+
+impl std::error::Error for PageOverflowError {}
 
 pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     pages: Vec<DataPage<DATA_LENGTH>>,
@@ -68,7 +96,17 @@ where
     T: Persistable + Send + Sync,
 {
     let inner_bytes = page.inner.as_bytes();
-    page.header.data_length = inner_bytes.as_ref().len() as u32;
+    let inner_length = inner_bytes.as_ref().len();
+    // An over-budget page must fail here, in its own persist, instead of
+    // silently corrupting the neighboring page.
+    if inner_length > INNER_PAGE_SIZE {
+        return Err(eyre::Report::new(PageOverflowError {
+            page_id: page.header.page_id,
+            data_length: inner_length,
+            capacity: INNER_PAGE_SIZE,
+        }));
+    }
+    page.header.data_length = inner_length as u32;
     file.write_all(page.header.as_bytes().as_ref()).await?;
     file.write_all(inner_bytes.as_ref()).await?;
     Ok(())
@@ -457,6 +495,59 @@ mod tests {
             length: marker.len() as u32,
             data,
         }
+    }
+
+    #[tokio::test]
+    async fn persist_page_rejects_inner_data_past_the_page_slot() {
+        // A data page whose buffer is larger than the slot budget can hand
+        // persist more bytes than fit between two page starts.
+        const OVERSIZED: usize = crate::PAGE_SIZE + 128;
+
+        let path = std::env::temp_dir().join(format!(
+            "data_bucket_persist_overflow_{}.wt",
+            std::process::id()
+        ));
+        let mut file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .await
+            .unwrap();
+
+        let mut page = GeneralPage {
+            header: GeneralHeader {
+                data_version: DATA_VERSION,
+                space_id: 1.into(),
+                page_id: 1.into(),
+                previous_id: 0.into(),
+                next_id: 0.into(),
+                page_type: PageType::Data,
+                data_length: 0,
+            },
+            inner: DataPage {
+                length: OVERSIZED as u32,
+                data: [7u8; OVERSIZED],
+            },
+        };
+
+        let err = super::persist_page(&mut page, &mut file).await.unwrap_err();
+        assert!(
+            err.downcast_ref::<super::PageOverflowError>().is_some(),
+            "expected PageOverflowError, got: {err}"
+        );
+
+        // Nothing may have been written: the neighboring page is the one an
+        // unchecked write would have corrupted.
+        assert_eq!(file.metadata().await.unwrap().len(), 0);
+
+        // A page that fits its slot still persists.
+        page.inner.length = 64;
+        super::persist_page(&mut page, &mut file).await.unwrap();
+
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[tokio::test]
