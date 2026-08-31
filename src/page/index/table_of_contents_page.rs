@@ -87,6 +87,7 @@ struct TableOfContentsPagePersisted<T: Ord + Eq> {
 impl<T: Ord + Eq> Persistable for TableOfContentsPage<T>
 where
     T: Clone
+        + SizeMeasurable
         + rkyv::Archive
         + for<'a> rkyv::Serialize<
             rkyv::rancor::Strategy<
@@ -127,22 +128,21 @@ where
         let model: TableOfContentsPagePersisted<T> =
             rkyv::deserialize::<_, rkyv::rancor::Error>(archived).expect("data should be valid");
         let records = BTreeMap::from_iter(model.records);
+        // Recompute the accounting from the actual contents instead of
+        // trusting the stored field: pages written by versions with
+        // accounting bugs (0.5.2 and earlier) would otherwise carry their
+        // wrong estimated_size across the upgrade and mislead the capacity
+        // checks.
+        let estimated_size = Self::recompute_estimated_size(&records, &model.empty_pages);
         Self {
             records,
-            estimated_size: model.estimated_size,
+            estimated_size,
             empty_pages: model.empty_pages,
         }
     }
 }
 
-impl<T> TableOfContentsPage<T>
-where
-    T: Debug + Ord + Eq,
-{
-    pub fn estimated_size(&self) -> usize {
-        self.estimated_size
-    }
-
+impl<T: Ord + Eq> TableOfContentsPage<T> {
     /// Serialized size of one `(key, PageId)` record.
     ///
     /// Mirrors `<(T, PageId) as SizeMeasurable>::aligned_size` without
@@ -161,6 +161,31 @@ where
             }
         }
         align(len)
+    }
+
+    /// Size accounting derived from the actual contents, used when loading
+    /// a persisted page: the stored `estimated_size` may carry accounting
+    /// bugs of the version that wrote it, and trusting it would let such an
+    /// error survive upgrades.
+    fn recompute_estimated_size(records: &BTreeMap<T, PageId>, empty_pages: &[PageId]) -> usize
+    where
+        T: SizeMeasurable,
+    {
+        let mut estimated_size = EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE;
+        for key in records.keys() {
+            estimated_size += Self::record_size(key);
+        }
+        estimated_size += empty_pages.len() * PageId::default().0.aligned_size();
+        estimated_size
+    }
+}
+
+impl<T> TableOfContentsPage<T>
+where
+    T: Debug + Ord + Eq,
+{
+    pub fn estimated_size(&self) -> usize {
+        self.estimated_size
     }
 
     pub fn insert(&mut self, val: T, page_id: PageId)
@@ -346,6 +371,38 @@ mod test {
             page_id: 1.into(),
             offset,
             length: 32,
+        }
+    }
+
+    #[test]
+    fn test_from_bytes_recomputes_stale_persisted_estimated_size() {
+        // Simulate a page persisted by 0.5.2, whose accounting bugs stored
+        // a wrong estimated_size: the load must recompute it from the
+        // actual records instead of trusting the stored field.
+        for bogus_estimated in [0usize, 3, 100_000] {
+            let stale = super::TableOfContentsPagePersisted {
+                records: vec![
+                    ((1u64, link(0)), crate::page::PageId::from(6)),
+                    ((2u64, link(64)), crate::page::PageId::from(7)),
+                ],
+                empty_pages: vec![9.into()],
+                estimated_size: bogus_estimated,
+            };
+            let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&stale).unwrap();
+
+            let loaded = TableOfContentsPage::<(u64, Link)>::from_bytes(&bytes, 0);
+            assert_ne!(loaded.estimated_size(), bogus_estimated);
+            // The recomputed accounting matches what the page really
+            // serializes to.
+            assert_eq!(loaded.estimated_size(), loaded.as_bytes().as_ref().len());
+
+            // And it matches what fresh inserts would have produced.
+            let mut fresh = TableOfContentsPage::<(u64, Link)>::default();
+            fresh.insert((1, link(0)), 6.into());
+            fresh.insert((2, link(64)), 7.into());
+            fresh.insert((3, link(128)), 9.into());
+            fresh.remove(&(3, link(128)));
+            assert_eq!(loaded.estimated_size(), fresh.estimated_size());
         }
     }
 
