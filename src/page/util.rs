@@ -94,16 +94,25 @@ where
     }
 }
 
+/// Byte offset of the page with the given index, computed in `u64`.
+///
+/// The arithmetic must never be done in `u32`: with the default 16 KiB
+/// [`PAGE_SIZE`], any index past 262 143 puts the page start beyond 4 GiB,
+/// and a `u32` multiply silently wraps the offset back into the start of
+/// the file.
+pub(crate) fn page_start_offset(index: u32) -> u64 {
+    index as u64 * PAGE_SIZE as u64
+}
+
 pub async fn seek_to_page_start(file: &mut File, index: u32) -> eyre::Result<()> {
-    file.seek(SeekFrom::Start(index as u64 * PAGE_SIZE as u64))
-        .await?;
+    file.seek(SeekFrom::Start(page_start_offset(index))).await?;
     Ok(())
 }
 
 async fn seek_to_page_start_relatively(file: &mut File, index: u32) -> eyre::Result<()> {
     let curr_position = file.stream_position().await?;
     file.seek(SeekFrom::Current(
-        (index * PAGE_SIZE as u32) as i64 - curr_position as i64,
+        page_start_offset(index) as i64 - curr_position as i64,
     ))
     .await?;
     Ok(())
@@ -408,6 +417,118 @@ pub async fn parse_space_info<const PAGE_SIZE: usize>(
 //
 //     Ok(result)
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::{page_start_offset, parse_data_pages_batch, persist_pages_batch};
+    use crate::page::header::GeneralHeader;
+    use crate::page::ty::PageType;
+    use crate::{DataPage, GeneralPage, DATA_VERSION, INNER_PAGE_SIZE, PAGE_SIZE};
+
+    /// First page index whose start offset no longer fits in `u32`.
+    const FIRST_PAGE_PAST_4_GIB: u32 = (u32::MAX / PAGE_SIZE as u32) + 1;
+
+    #[test]
+    fn page_start_offset_is_computed_in_u64() {
+        assert_eq!(
+            page_start_offset(FIRST_PAGE_PAST_4_GIB),
+            FIRST_PAGE_PAST_4_GIB as u64 * PAGE_SIZE as u64
+        );
+        assert!(page_start_offset(FIRST_PAGE_PAST_4_GIB) > u32::MAX as u64);
+        // The largest possible page id must be addressable too.
+        assert_eq!(
+            page_start_offset(u32::MAX),
+            u32::MAX as u64 * PAGE_SIZE as u64
+        );
+        // The old `u32` arithmetic wrapped this offset back into the first
+        // pages of the file.
+        assert_ne!(
+            page_start_offset(FIRST_PAGE_PAST_4_GIB),
+            FIRST_PAGE_PAST_4_GIB.wrapping_mul(PAGE_SIZE as u32) as u64
+        );
+    }
+
+    fn data_page_with_marker(marker: &[u8]) -> DataPage<INNER_PAGE_SIZE> {
+        let mut data = [0u8; INNER_PAGE_SIZE];
+        data[..marker.len()].copy_from_slice(marker);
+        DataPage {
+            length: marker.len() as u32,
+            data,
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_persist_and_parse_address_pages_past_4_gib() {
+        const FIRST_MARKER: &[u8] = b"FIRSTPG!";
+        const BOUNDARY_MARKER: &[u8] = b"BOUNDARY";
+
+        let path = std::env::temp_dir().join(format!(
+            "data_bucket_seek_past_4gib_{}.wt",
+            std::process::id()
+        ));
+        let mut file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .await
+            .unwrap();
+
+        let first_page = GeneralPage {
+            header: GeneralHeader {
+                data_version: DATA_VERSION,
+                space_id: 1.into(),
+                page_id: 1.into(),
+                previous_id: 0.into(),
+                next_id: 2.into(),
+                page_type: PageType::Data,
+                data_length: 0,
+            },
+            inner: data_page_with_marker(FIRST_MARKER),
+        };
+        let boundary_page = GeneralPage {
+            header: GeneralHeader {
+                data_version: DATA_VERSION,
+                space_id: 1.into(),
+                page_id: FIRST_PAGE_PAST_4_GIB.into(),
+                previous_id: 1.into(),
+                next_id: 0.into(),
+                page_type: PageType::Data,
+                data_length: 0,
+            },
+            inner: data_page_with_marker(BOUNDARY_MARKER),
+        };
+
+        persist_pages_batch(vec![first_page, boundary_page], &mut file)
+            .await
+            .unwrap();
+
+        // The boundary page must have been written past 4 GiB (the file is
+        // sparse, so this stays cheap), not wrapped back onto the first pages.
+        let file_length = file.metadata().await.unwrap().len();
+        assert!(file_length > page_start_offset(FIRST_PAGE_PAST_4_GIB));
+
+        let pages = parse_data_pages_batch::<{ PAGE_SIZE as u32 }, INNER_PAGE_SIZE>(
+            &mut file,
+            vec![1, FIRST_PAGE_PAST_4_GIB],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].header.page_id, 1.into());
+        assert_eq!(&pages[0].inner.data[..FIRST_MARKER.len()], FIRST_MARKER);
+        assert_eq!(pages[1].header.page_id, FIRST_PAGE_PAST_4_GIB.into());
+        assert_eq!(
+            &pages[1].inner.data[..BOUNDARY_MARKER.len()],
+            BOUNDARY_MARKER
+        );
+
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
+    }
+}
 
 // #[cfg(test)]
 // pub mod test {
