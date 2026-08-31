@@ -1,4 +1,5 @@
 use rkyv::{Archive, Deserialize, Serialize};
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
@@ -190,13 +191,21 @@ where
 
     pub fn insert(&mut self, val: T, page_id: PageId)
     where
-        T: SizeMeasurable + Clone,
+        T: SizeMeasurable,
     {
+        // One map traversal via the entry API; the size arithmetic is done
+        // up front and nothing is cloned or serialized.
         let record_size = Self::record_size(&val);
-        // Inserting over an existing key replaces its PageId in place, so
-        // the serialized page does not grow.
-        if self.records.insert(val, page_id).is_none() {
-            self.estimated_size += record_size;
+        match self.records.entry(val) {
+            // Inserting over an existing key replaces its PageId in place,
+            // so the serialized page does not grow.
+            Entry::Occupied(mut entry) => {
+                entry.insert(page_id);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(page_id);
+                self.estimated_size += record_size;
+            }
         }
     }
 
@@ -207,27 +216,39 @@ where
     /// untouched and the key is handed back in the error, so the caller can
     /// place it on another page; [`TableOfContentsOverflowError::fits_empty_page`]
     /// tells whether a fresh page can ever hold it.
+    ///
+    /// One map traversal; the capacity check is pure arithmetic and runs
+    /// before the map gains the record.
     pub fn try_insert(
         &mut self,
         val: T,
         page_id: PageId,
     ) -> Result<(), TableOfContentsOverflowError<T>>
     where
-        T: SizeMeasurable + Clone,
+        T: SizeMeasurable,
     {
         let record_size = Self::record_size(&val);
-        // Replacing an existing key does not grow the page, so it always
-        // fits.
-        if !self.records.contains_key(&val) && self.estimated_size + record_size > INNER_PAGE_SIZE {
-            return Err(TableOfContentsOverflowError {
-                key: val,
-                record_size,
-                estimated_size: self.estimated_size,
-                capacity: INNER_PAGE_SIZE,
-            });
+        match self.records.entry(val) {
+            // Replacing an existing key does not grow the page, so it
+            // always fits.
+            Entry::Occupied(mut entry) => {
+                entry.insert(page_id);
+                Ok(())
+            }
+            Entry::Vacant(entry) => {
+                if self.estimated_size + record_size > INNER_PAGE_SIZE {
+                    return Err(TableOfContentsOverflowError {
+                        key: entry.into_key(),
+                        record_size,
+                        estimated_size: self.estimated_size,
+                        capacity: INNER_PAGE_SIZE,
+                    });
+                }
+                entry.insert(page_id);
+                self.estimated_size += record_size;
+                Ok(())
+            }
         }
-        self.insert(val, page_id);
-        Ok(())
     }
 
     pub fn pop_empty_page(&mut self) -> Option<PageId>
@@ -282,6 +303,8 @@ where
     /// This variant performs no capacity check: a key that grows past the
     /// page slot is accepted and only reported through `estimated_size`.
     /// Use [`Self::try_update_key`] when the caller can relocate instead.
+    /// Two map traversals (removal of the old key, entry at the new key),
+    /// the minimum for touching two distinct keys.
     pub fn update_key(&mut self, old_key: &T, new_key: T) -> Option<()>
     where
         T: SizeMeasurable,
@@ -289,10 +312,16 @@ where
         let id = self.records.remove(old_key)?;
         self.estimated_size -= Self::record_size(old_key);
         let new_record_size = Self::record_size(&new_key);
-        // If `new_key` was already present, its record is replaced in place
-        // and the serialized page does not grow.
-        if self.records.insert(new_key, id).is_none() {
-            self.estimated_size += new_record_size;
+        match self.records.entry(new_key) {
+            // If `new_key` was already present, its record is replaced in
+            // place and the serialized page does not grow.
+            Entry::Occupied(mut entry) => {
+                entry.insert(id);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(id);
+                self.estimated_size += new_record_size;
+            }
         }
         Some(())
     }
@@ -306,6 +335,11 @@ where
     ///
     /// Returns `Ok(true)` when the key was updated and `Ok(false)` when
     /// `old_key` is not present (the page stays untouched).
+    ///
+    /// Two map traversals on the accept and missing-key paths (removal of
+    /// the old key, entry at the new key); a rejected update restores the
+    /// removed record with a third. The capacity check is pure arithmetic
+    /// and runs before the map gains the new record.
     pub fn try_update_key(
         &mut self,
         old_key: &T,
@@ -314,31 +348,39 @@ where
     where
         T: SizeMeasurable,
     {
-        if !self.records.contains_key(old_key) {
+        let Some((old_entry_key, id)) = self.records.remove_entry(old_key) else {
             return Ok(false);
-        }
-
-        let new_record_size = Self::record_size(&new_key);
-        // Re-keying onto an already existing key replaces that record in
-        // place, so only the old record's size is released.
-        let replaces_existing = new_key != *old_key && self.records.contains_key(&new_key);
-        let projected = if replaces_existing {
-            self.estimated_size - Self::record_size(old_key)
-        } else {
-            self.estimated_size - Self::record_size(old_key) + new_record_size
         };
-        if projected > INNER_PAGE_SIZE {
-            return Err(TableOfContentsOverflowError {
-                key: new_key,
-                record_size: new_record_size,
-                estimated_size: self.estimated_size,
-                capacity: INNER_PAGE_SIZE,
-            });
+        let old_record_size = Self::record_size(old_key);
+        let new_record_size = Self::record_size(&new_key);
+        match self.records.entry(new_key) {
+            // Re-keying onto an already existing key replaces that record
+            // in place: the page shrinks by the old record, so it always
+            // fits.
+            Entry::Occupied(mut entry) => {
+                entry.insert(id);
+                self.estimated_size -= old_record_size;
+                Ok(true)
+            }
+            Entry::Vacant(entry) => {
+                let projected = self.estimated_size - old_record_size + new_record_size;
+                if projected > INNER_PAGE_SIZE {
+                    let key = entry.into_key();
+                    // Restore the removed record: a rejected update leaves
+                    // the page as it was.
+                    self.records.insert(old_entry_key, id);
+                    return Err(TableOfContentsOverflowError {
+                        key,
+                        record_size: new_record_size,
+                        estimated_size: self.estimated_size,
+                        capacity: INNER_PAGE_SIZE,
+                    });
+                }
+                entry.insert(id);
+                self.estimated_size = projected;
+                Ok(true)
+            }
         }
-
-        self.update_key(old_key, new_key)
-            .expect("old_key presence checked above");
-        Ok(true)
     }
 
     pub fn contains(&self, val: &T) -> bool {
@@ -488,6 +530,35 @@ mod test {
                  serialized {serialized}, estimated {estimated}, records {record_count}"
             );
         }
+    }
+
+    #[test]
+    fn test_try_update_key_onto_existing_key_replaces_in_place() {
+        let mut toc_page = TableOfContentsPage::<(u32, Link)>::default();
+        toc_page.insert((1, link(0)), 6.into());
+        toc_page.insert((2, link(64)), 7.into());
+
+        // Re-keying onto an existing key keeps the accounting exact and
+        // repoints the surviving record.
+        assert!(toc_page
+            .try_update_key(&(1, link(0)), (2, link(64)))
+            .unwrap());
+        assert!(!toc_page.contains(&(1, link(0))));
+        assert_eq!(toc_page.get(&(2, link(64))), Some(6.into()));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+
+        // Re-keying a record onto itself is a no-op that still succeeds.
+        assert!(toc_page
+            .try_update_key(&(2, link(64)), (2, link(64)))
+            .unwrap());
+        assert_eq!(toc_page.get(&(2, link(64))), Some(6.into()));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
     }
 
     #[test]
