@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::page::PageId;
-use crate::{align, Persistable, SizeMeasurable};
+use crate::{align, align8, Persistable, SizeMeasurable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Serialize)]
 pub struct TableOfContentsPage<T: Ord + Eq> {
@@ -92,11 +92,29 @@ where
         self.estimated_size
     }
 
+    /// Serialized size of one `(key, PageId)` record.
+    ///
+    /// Mirrors `<(T, PageId) as SizeMeasurable>::aligned_size` without
+    /// needing to clone the key, so insertion and removal account records
+    /// with the same formula.
+    fn record_size(key: &T) -> usize
+    where
+        T: SizeMeasurable,
+    {
+        let len = key.aligned_size() + PageId::default().0.aligned_size();
+        if let Some(key_align) = T::align() {
+            if key_align % 8 == 0 {
+                return align8(len);
+            }
+        }
+        align(len)
+    }
+
     pub fn insert(&mut self, val: T, page_id: PageId)
     where
         T: SizeMeasurable + Clone,
     {
-        self.estimated_size += (val.clone(), page_id).aligned_size();
+        self.estimated_size += Self::record_size(&val);
         let _ = self.records.insert(val, page_id);
     }
 
@@ -136,7 +154,7 @@ where
     where
         T: SizeMeasurable,
     {
-        self.estimated_size -= align(val.aligned_size() + PageId::default().0.aligned_size());
+        self.estimated_size -= Self::record_size(val);
 
         self.records
             .remove(val)
@@ -226,6 +244,29 @@ mod test {
             toc_page.as_bytes().as_ref().len(),
             toc_page.estimated_size()
         );
+    }
+
+    #[test]
+    fn test_remove_accounts_8_aligned_keys_like_insert() {
+        // (u64, Link) records are 8-aligned, so their serialized record size
+        // is align8-rounded. Removal used to subtract the 4-aligned size,
+        // leaving estimated_size drifting upward on every insert/remove
+        // cycle.
+        let mut toc_page = TableOfContentsPage::<(u64, Link)>::default();
+        let empty_size = toc_page.as_bytes().as_ref().len();
+
+        toc_page.insert((128, link(0)), 6.into());
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+
+        toc_page.remove_without_record(&(128, link(0)));
+        assert_eq!(
+            toc_page.as_bytes().as_ref().len(),
+            toc_page.estimated_size()
+        );
+        assert_eq!(toc_page.estimated_size(), empty_size);
     }
 
     #[test]
