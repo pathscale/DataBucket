@@ -140,7 +140,9 @@ pub async fn update_at<const DATA_LENGTH: u32>(
         ));
     }
 
-    if (link.offset + link.length) > DATA_LENGTH {
+    // Sum in u64: `offset + length` in u32 can wrap past 4 GiB and slip
+    // under the bound, letting the write land outside the page.
+    if link.offset as u64 + link.length as u64 > DATA_LENGTH as u64 {
         return Err(eyre!(
             "Link range (offset: {}, length: {}) exceeds data bounds ({})",
             link.offset,
@@ -455,6 +457,37 @@ mod tests {
             length: marker.len() as u32,
             data,
         }
+    }
+
+    #[tokio::test]
+    async fn update_at_rejects_offset_plus_length_wrapping_u32() {
+        let path = std::env::temp_dir().join(format!(
+            "data_bucket_update_at_wrap_{}.wt",
+            std::process::id()
+        ));
+        let mut file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .await
+            .unwrap();
+
+        // In u32, offset + length wraps to 5 and used to pass the bounds
+        // check, sending the write far outside the page.
+        let link = crate::Link {
+            page_id: 1.into(),
+            offset: u32::MAX - 2,
+            length: 8,
+        };
+        let err = super::update_at::<100>(&mut file, link, &[1, 2, 3, 4, 5, 6, 7, 8])
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("exceeds data bounds"));
+
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[tokio::test]
