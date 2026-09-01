@@ -49,3 +49,23 @@ jobs:
       # command's exit code is all we need to gate the job.
       - name: Clippy (deny warnings)
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [build, clippy_check]
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish when master carries a new version
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then echo "CARGO_REGISTRY_TOKEN not set; skipping publish"; exit 0; fi
+          v=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          if curl -fsSL "https://index.crates.io/da/ta/data_bucket" | sed -n 's/.*"vers":"\([^"]*\)".*/\1/p' | grep -qx "$v"; then
+            echo "data_bucket $v is already on crates.io; nothing to publish"
+            exit 0
+          fi
+          cargo publish -p data_bucket
