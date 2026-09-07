@@ -88,7 +88,7 @@ where
     async fn parse_index_page_utility(
         file: &mut File,
         page_id: PageId,
-    ) -> eyre::Result<Self::Utility> {
+    ) -> crate::error::Result<Self::Utility> {
         seek_to_page_start(file, page_id.0).await?;
         let offset = GENERAL_HEADER_SIZE as i64;
         file.seek(SeekFrom::Current(offset)).await?;
@@ -100,7 +100,9 @@ where
         let archived = crate::access_archived::<<u16 as Archive>::Archived>(
             &size_bytes[0..SizedIndexPageUtility::<T>::size_size()],
         )
-        .map_err(|error| eyre::eyre!("torn or corrupt index page size field: {error}"))?;
+        .map_err(|_| crate::error::Error::Corrupt {
+            what: "index page size field",
+        })?;
         let size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
 
@@ -160,7 +162,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         new_page
     }
 
-    async fn read_value(file: &mut File) -> eyre::Result<IndexValue<T>>
+    async fn read_value(file: &mut File) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -177,7 +179,9 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         v.extend_from_slice(bytes.as_slice());
         // Validated: a torn index entry must be an error, not a dangling link.
         let archived = crate::access_archived::<<IndexValue<T> as Archive>::Archived>(&v[..])
-            .map_err(|error| eyre::eyre!("torn or corrupt index entry: {error}"))?;
+            .map_err(|_| crate::error::Error::Corrupt {
+                what: "index entry",
+            })?;
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
@@ -186,7 +190,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         page_id: PageId,
         size: usize,
         index: usize,
-    ) -> eyre::Result<IndexValue<T>>
+    ) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -245,7 +249,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         size: usize,
         value: IndexValue<T>,
         mut value_index: u16,
-    ) -> eyre::Result<u16>
+    ) -> crate::error::Result<u16>
     where
         T: Archive
             + Eq
@@ -283,7 +287,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         page_id: PageId,
         size: usize,
         value_index: u16,
-    ) -> eyre::Result<()>
+    ) -> crate::error::Result<()>
     where
         T: Archive
             + Default
@@ -415,7 +419,7 @@ mod tests {
 
     #[tokio::test]
     async fn persist_and_remove_value_reject_writes_past_the_page_slot() {
-        use super::{IndexPageUtility, PageOverflowError, SizedIndexPageUtility};
+        use super::{IndexPageUtility, SizedIndexPageUtility};
 
         let path = std::env::temp_dir().join(format!(
             "data_bucket_slot_write_bounds_{}.wt",
@@ -449,16 +453,16 @@ mod tests {
             .await
             .unwrap_err();
         assert!(
-            err.downcast_ref::<PageOverflowError>().is_some(),
-            "expected PageOverflowError, got: {err}"
+            matches!(err, crate::error::Error::PageOverflow { .. }),
+            "expected a page overflow, got: {err}"
         );
 
         let err = IndexPage::<u64>::remove_value(&mut file, 1.into(), 4, 2000)
             .await
             .unwrap_err();
         assert!(
-            err.downcast_ref::<PageOverflowError>().is_some(),
-            "expected PageOverflowError, got: {err}"
+            matches!(err, crate::error::Error::PageOverflow { .. }),
+            "expected a page overflow, got: {err}"
         );
 
         // A utility larger than the page slot must be rejected too.
@@ -477,8 +481,8 @@ mod tests {
         .await
         .unwrap_err();
         assert!(
-            err.downcast_ref::<PageOverflowError>().is_some(),
-            "expected PageOverflowError, got: {err}"
+            matches!(err, crate::error::Error::PageOverflow { .. }),
+            "expected a page overflow, got: {err}"
         );
 
         // Nothing was written by the rejected operations.

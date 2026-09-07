@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use eyre::bail;
 use indexset::cdc::change::ChangeEvent;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -32,7 +31,10 @@ where
         + PartialOrd
         + Debug,
 {
-    pub fn apply_change_event(&mut self, event: ChangeEvent<Pair<T, Link>>) -> eyre::Result<()> {
+    pub fn apply_change_event(
+        &mut self,
+        event: ChangeEvent<Pair<T, Link>>,
+    ) -> crate::error::Result<()> {
         match event.clone() {
             ChangeEvent::InsertAt {
                 event_id: _,
@@ -67,13 +69,11 @@ where
             }
             ChangeEvent::SplitNode { .. }
             | ChangeEvent::CreateNode { .. }
-            | ChangeEvent::RemoveNode { .. } => {
-                bail!("Events of `SplitNode`, `CreateNode` or `RemoveNode` can not be applied")
-            }
+            | ChangeEvent::RemoveNode { .. } => Err(crate::error::Error::UnapplicableEvent),
         }
     }
 
-    fn apply_insert_at(&mut self, index: usize, value: Pair<T, Link>) -> eyre::Result<()> {
+    fn apply_insert_at(&mut self, index: usize, value: Pair<T, Link>) -> crate::error::Result<()> {
         // For insert we first add slot entry for our new index value
         self.slots.insert(index, self.current_index);
         self.slots.remove(self.size as usize);
@@ -101,7 +101,7 @@ where
         Ok(())
     }
 
-    fn apply_remove_at(&mut self, index: usize) -> eyre::Result<()> {
+    fn apply_remove_at(&mut self, index: usize) -> crate::error::Result<()> {
         // For remove we first remove slot entry for index value
         let value_position = self.slots.remove(index);
         // We push 0 in the tail because slots size should be fixed.

@@ -4,6 +4,7 @@ extern crate core;
 // uses its own derive: alias ourselves so the generated code resolves here too.
 extern crate self as data_bucket;
 
+pub mod error;
 pub mod link;
 pub mod page;
 pub mod persistence;

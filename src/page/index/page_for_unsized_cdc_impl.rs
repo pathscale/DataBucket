@@ -1,4 +1,3 @@
-use eyre::bail;
 use indexset::cdc::change::ChangeEvent;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -29,7 +28,10 @@ where
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
         + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
 {
-    pub fn apply_change_event(&mut self, event: ChangeEvent<Pair<T, Link>>) -> eyre::Result<()> {
+    pub fn apply_change_event(
+        &mut self,
+        event: ChangeEvent<Pair<T, Link>>,
+    ) -> crate::error::Result<()> {
         match event {
             ChangeEvent::InsertAt {
                 event_id: _,
@@ -70,13 +72,11 @@ where
             }
             ChangeEvent::SplitNode { .. }
             | ChangeEvent::CreateNode { .. }
-            | ChangeEvent::RemoveNode { .. } => {
-                bail!("Events of `SplitNode`, `CreateNode` or `RemoveNode` can not be applied")
-            }
+            | ChangeEvent::RemoveNode { .. } => Err(crate::error::Error::UnapplicableEvent),
         }
     }
 
-    fn apply_insert_at(&mut self, index: usize, value: Pair<T, Link>) -> eyre::Result<()> {
+    fn apply_insert_at(&mut self, index: usize, value: Pair<T, Link>) -> crate::error::Result<()> {
         // For insert we first add slot entry for our new index value
         let index_value = IndexValue {
             key: value.key.clone(),
@@ -99,7 +99,7 @@ where
         Ok(())
     }
 
-    fn apply_remove_at(&mut self, index: usize) -> eyre::Result<()> {
+    fn apply_remove_at(&mut self, index: usize) -> crate::error::Result<()> {
         self.slots.remove(index);
         self.slots_size -= 1;
         let v = self.index_values.remove(index);
