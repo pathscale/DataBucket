@@ -1,4 +1,4 @@
-use eyre::eyre;
+use crate::error::Error;
 use rkyv::api::high::HighDeserializer;
 use rkyv::Archive;
 use std::io::SeekFrom;
@@ -72,7 +72,7 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
 pub async fn persist_page<'a, T>(
     page: &'a mut GeneralPage<T>,
     file: &'a mut File,
-) -> eyre::Result<()>
+) -> crate::error::Result<()>
 where
     T: Persistable + Send + Sync,
 {
@@ -92,7 +92,7 @@ where
 async fn persist_page_in_place<'a, T>(
     page: &'a mut GeneralPage<T>,
     file: &'a mut File,
-) -> eyre::Result<()>
+) -> crate::error::Result<()>
 where
     T: Persistable + Send + Sync,
 {
@@ -101,11 +101,11 @@ where
     // An over-budget page must fail here, in its own persist, instead of
     // silently corrupting the neighboring page.
     if inner_length > INNER_PAGE_SIZE {
-        return Err(eyre::Report::new(PageOverflowError {
-            page_id: page.header.page_id,
-            data_length: inner_length,
+        return Err(Error::PageOverflow {
+            page: page.header.page_id,
+            needed: inner_length,
             capacity: INNER_PAGE_SIZE,
-        }));
+        });
     }
     page.header.data_length = inner_length as u32;
     file.write_all(page.header.as_bytes().as_ref()).await?;
@@ -113,7 +113,10 @@ where
     Ok(())
 }
 
-pub async fn persist_pages_batch<T>(pages: Vec<GeneralPage<T>>, file: &mut File) -> eyre::Result<()>
+pub async fn persist_pages_batch<T>(
+    pages: Vec<GeneralPage<T>>,
+    file: &mut File,
+) -> crate::error::Result<()>
 where
     T: Persistable + Send + Sync,
 {
@@ -143,12 +146,12 @@ pub(crate) fn page_start_offset(index: u32) -> u64 {
     index as u64 * PAGE_SIZE as u64
 }
 
-pub async fn seek_to_page_start(file: &mut File, index: u32) -> eyre::Result<()> {
+pub async fn seek_to_page_start(file: &mut File, index: u32) -> crate::error::Result<()> {
     file.seek(SeekFrom::Start(page_start_offset(index))).await?;
     Ok(())
 }
 
-async fn seek_to_page_start_relatively(file: &mut File, index: u32) -> eyre::Result<()> {
+async fn seek_to_page_start_relatively(file: &mut File, index: u32) -> crate::error::Result<()> {
     let curr_position = file.stream_position().await?;
     file.seek(SeekFrom::Current(
         page_start_offset(index) as i64 - curr_position as i64,
@@ -157,7 +160,7 @@ async fn seek_to_page_start_relatively(file: &mut File, index: u32) -> eyre::Res
     Ok(())
 }
 
-pub async fn seek_by_link(file: &mut File, link: Link) -> eyre::Result<()> {
+pub async fn seek_by_link(file: &mut File, link: Link) -> crate::error::Result<()> {
     file.seek(SeekFrom::Start(
         link.page_id.0 as u64 * PAGE_SIZE as u64 + GENERAL_HEADER_SIZE as u64 + link.offset as u64,
     ))
@@ -170,24 +173,22 @@ pub async fn update_at<const DATA_LENGTH: u32>(
     file: &mut File,
     link: Link,
     new_data: &[u8],
-) -> eyre::Result<()> {
+) -> crate::error::Result<()> {
     if new_data.len() as u32 != link.length {
-        return Err(eyre!(
-            "New data length {} does not match link length {}",
-            new_data.len(),
-            link.length
-        ));
+        return Err(Error::LinkLengthMismatch {
+            expected: link.length,
+            found: new_data.len(),
+        });
     }
 
     // Sum in u64: `offset + length` in u32 can wrap past 4 GiB and slip
     // under the bound, letting the write land outside the page.
     if link.offset as u64 + link.length as u64 > DATA_LENGTH as u64 {
-        return Err(eyre!(
-            "Link range (offset: {}, length: {}) exceeds data bounds ({})",
-            link.offset,
-            link.length,
-            DATA_LENGTH
-        ));
+        return Err(Error::LinkOutOfBounds {
+            offset: link.offset,
+            length: link.length,
+            capacity: DATA_LENGTH as usize,
+        });
     }
 
     seek_by_link(file, link).await?;
@@ -195,15 +196,19 @@ pub async fn update_at<const DATA_LENGTH: u32>(
     Ok(())
 }
 
-pub async fn parse_general_header(file: &mut File) -> eyre::Result<GeneralHeader> {
+pub async fn parse_general_header(file: &mut File) -> crate::error::Result<GeneralHeader> {
     let mut buffer = [0; GENERAL_HEADER_SIZE];
     file.read_exact(&mut buffer).await?;
     // Validated: a header torn by a mid-write death must surface as an error
     // naming the page, not as undefined behavior in whatever reads it next.
     let archived = crate::access_archived::<<GeneralHeader as Archive>::Archived>(&buffer[..])
-        .map_err(|error| eyre::eyre!("torn or corrupt page header: {error}"))?;
-    let header = rkyv::deserialize::<_, rkyv::rancor::Error>(archived)
-        .map_err(|error| eyre::eyre!("page header failed to deserialize: {error}"))?;
+        .map_err(|_| Error::Corrupt {
+            what: "page header",
+        })?;
+    let header =
+        rkyv::deserialize::<_, rkyv::rancor::Error>(archived).map_err(|_| Error::Corrupt {
+            what: "page header",
+        })?;
 
     Ok(header)
 }
@@ -211,7 +216,7 @@ pub async fn parse_general_header(file: &mut File) -> eyre::Result<GeneralHeader
 pub async fn parse_page<Page, const INNER_PAGE_SIZE: u32>(
     file: &mut File,
     index: u32,
-) -> eyre::Result<GeneralPage<Page>>
+) -> crate::error::Result<GeneralPage<Page>>
 where
     Page: rkyv::Archive + Persistable,
     <Page as rkyv::Archive>::Archived:
@@ -223,7 +228,7 @@ where
 
 async fn parse_page_in_place<Page, const INNER_PAGE_SIZE: u32>(
     file: &mut File,
-) -> eyre::Result<GeneralPage<Page>>
+) -> crate::error::Result<GeneralPage<Page>>
 where
     Page: rkyv::Archive + Persistable,
     <Page as rkyv::Archive>::Archived:
@@ -249,7 +254,7 @@ where
 pub async fn parse_pages_batch<Page, const PAGE_SIZE: u32>(
     file: &mut File,
     indexes: Vec<u32>,
-) -> eyre::Result<Vec<GeneralPage<Page>>>
+) -> crate::error::Result<Vec<GeneralPage<Page>>>
 where
     Page: rkyv::Archive + Persistable,
     <Page as rkyv::Archive>::Archived:
@@ -277,7 +282,7 @@ where
 pub async fn parse_general_header_by_index(
     file: &mut File,
     index: u32,
-) -> eyre::Result<GeneralHeader> {
+) -> crate::error::Result<GeneralHeader> {
     seek_to_page_start(file, index).await?;
     let header = parse_general_header(file).await?;
 
@@ -287,14 +292,14 @@ pub async fn parse_general_header_by_index(
 pub async fn parse_data_page<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
     file: &mut File,
     index: u32,
-) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+) -> crate::error::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     seek_to_page_start(file, index).await?;
     parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await
 }
 
 async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
     file: &mut File,
-) -> eyre::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+) -> crate::error::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     let header = parse_general_header(file).await?;
 
     let mut buffer = [0u8; INNER_PAGE_SIZE];
@@ -319,7 +324,7 @@ async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: u
 pub async fn parse_data_pages_batch<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
     file: &mut File,
     indexes: Vec<u32>,
-) -> eyre::Result<Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>>> {
+) -> crate::error::Result<Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>>> {
     let mut iter = indexes.into_iter();
     if let Some(index) = iter.next() {
         let mut pages = vec![];
@@ -345,7 +350,7 @@ pub async fn parse_data_pages_batch<const PAGE_SIZE: u32, const INNER_PAGE_SIZE:
 //     offset: u32,
 //     length: u32,
 //     schema: &Vec<(String, String)>,
-// ) -> eyre::Result<Vec<DataTypeValue>> {
+// ) -> crate::error::Result<Vec<DataTypeValue>> {
 //     seek_to_page_start(file, index)?;
 //     let header = parse_general_header(file)?;
 //     if header.page_type != PageType::Data {
@@ -365,7 +370,7 @@ pub async fn parse_data_pages_batch<const PAGE_SIZE: u32, const INNER_PAGE_SIZE:
 
 pub async fn parse_space_info<const PAGE_SIZE: usize>(
     file: &mut File,
-) -> eyre::Result<SpaceInfoPage> {
+) -> crate::error::Result<SpaceInfoPage> {
     file.seek(SeekFrom::Start(0)).await?;
     let header = parse_general_header(file).await?;
 
@@ -378,7 +383,7 @@ pub async fn parse_space_info<const PAGE_SIZE: usize>(
 // pub fn read_index_pages<T, const PAGE_SIZE: usize>(
 //     file: &mut std::fs::File,
 //     length: u32,
-// ) -> eyre::Result<Vec<IndexValue<T>>>
+// ) -> crate::error::Result<Vec<IndexValue<T>>>
 // where
 //     T: Archive,
 //     <T as rkyv::Archive>::Archived: rkyv::Deserialize<T, HighDeserializer<rkyv::rancor::Error>>,
@@ -394,7 +399,7 @@ pub async fn parse_space_info<const PAGE_SIZE: usize>(
 // fn read_links<DataType, const PAGE_SIZE: usize>(
 //     mut file: &mut std::fs::File,
 //     space_info: &SpaceInfo,
-// ) -> eyre::Result<Vec<Link>> {
+// ) -> crate::error::Result<Vec<Link>> {
 //     Ok(
 //         read_index_pages::<i32, PAGE_SIZE>(&mut file, space_info.primary_key_length)?
 //             .iter()
@@ -405,14 +410,14 @@ pub async fn parse_space_info<const PAGE_SIZE: usize>(
 //
 // pub fn read_rows_schema<const PAGE_SIZE: usize>(
 //     file: &mut std::fs::File,
-// ) -> eyre::Result<Vec<(String, String)>> {
+// ) -> crate::error::Result<Vec<(String, String)>> {
 //     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
 //     Ok(space_info.row_schema)
 // }
 //
 // pub fn read_data_pages<const PAGE_SIZE: usize>(
 //     mut file: &mut std::fs::File,
-// ) -> eyre::Result<Vec<Vec<DataTypeValue>>> {
+// ) -> crate::error::Result<Vec<Vec<DataTypeValue>>> {
 //     let space_info = parse_space_info::<PAGE_SIZE>(file)?;
 //     let primary_key_fields = &space_info.primary_key_fields;
 //     if primary_key_fields.len() != 1 {
@@ -535,8 +540,8 @@ mod tests {
 
         let err = super::persist_page(&mut page, &mut file).await.unwrap_err();
         assert!(
-            err.downcast_ref::<super::PageOverflowError>().is_some(),
-            "expected PageOverflowError, got: {err}"
+            matches!(err, crate::error::Error::PageOverflow { .. }),
+            "expected a page overflow, got: {err}"
         );
 
         // Nothing may have been written: the neighboring page is the one an
@@ -576,7 +581,7 @@ mod tests {
         let err = super::update_at::<100>(&mut file, link, &[1, 2, 3, 4, 5, 6, 7, 8])
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("exceeds data bounds"));
+        assert!(matches!(err, crate::error::Error::LinkOutOfBounds { .. }));
 
         drop(file);
         std::fs::remove_file(&path).unwrap();

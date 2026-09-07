@@ -1,6 +1,6 @@
+use crate::error::{Error, Result};
 use crate::Link;
 use crate::Persistable;
-use eyre::{eyre, Result};
 
 #[derive(Debug)]
 pub struct DataPage<const DATA_LENGTH: usize> {
@@ -11,11 +11,10 @@ pub struct DataPage<const DATA_LENGTH: usize> {
 impl<const DATA_LENGTH: usize> DataPage<DATA_LENGTH> {
     pub fn update_at(&mut self, link: Link, new_data: &[u8]) -> Result<()> {
         if new_data.len() as u32 != link.length {
-            return Err(eyre!(
-                "New data length {} does not match link length {}",
-                new_data.len(),
-                link.length
-            ));
+            return Err(Error::LinkLengthMismatch {
+                expected: link.length,
+                found: new_data.len(),
+            });
         }
 
         // Sum in usize: `offset + length` in u32 can wrap past 4 GiB and
@@ -23,12 +22,11 @@ impl<const DATA_LENGTH: usize> DataPage<DATA_LENGTH> {
         let start = link.offset as usize;
         let end = link.offset as usize + link.length as usize;
         if end > DATA_LENGTH {
-            return Err(eyre!(
-                "Link range (offset: {}, length: {}) exceeds data bounds ({})",
-                link.offset,
-                link.length,
-                DATA_LENGTH
-            ));
+            return Err(Error::LinkOutOfBounds {
+                offset: link.offset,
+                length: link.length,
+                capacity: DATA_LENGTH,
+            });
         }
 
         self.data[start..end].copy_from_slice(new_data);
@@ -42,12 +40,11 @@ impl<const DATA_LENGTH: usize> DataPage<DATA_LENGTH> {
         let start = link.offset as usize;
         let end = link.offset as usize + link.length as usize;
         if end > DATA_LENGTH {
-            return Err(eyre!(
-                "Link range (offset: {}, length: {}) exceeds data bounds ({})",
-                link.offset,
-                link.length,
-                DATA_LENGTH
-            ));
+            return Err(Error::LinkOutOfBounds {
+                offset: link.offset,
+                length: link.length,
+                capacity: DATA_LENGTH,
+            });
         }
 
         Ok(&self.data[start..end])
@@ -105,9 +102,13 @@ mod tests {
         };
 
         let err = data.update_at(link, &[1, 2]).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("New data length 2 does not match link length 3"));
+        assert_eq!(
+            err,
+            Error::LinkLengthMismatch {
+                expected: 3,
+                found: 2
+            }
+        );
     }
 
     #[test]
@@ -124,9 +125,14 @@ mod tests {
         };
 
         let err = data.update_at(link, &[1, 2, 3]).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Link range (offset: 98, length: 3) exceeds data bounds (100)"));
+        assert_eq!(
+            err,
+            Error::LinkOutOfBounds {
+                offset: 98,
+                length: 3,
+                capacity: 100
+            }
+        );
     }
 
     #[test]
@@ -145,7 +151,7 @@ mod tests {
         };
 
         let err = data.update_at(link, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap_err();
-        assert!(err.to_string().contains("exceeds data bounds"));
+        assert!(matches!(err, Error::LinkOutOfBounds { .. }));
     }
 
     #[test]
@@ -162,7 +168,7 @@ mod tests {
         };
 
         let err = data.get_at(link).unwrap_err();
-        assert!(err.to_string().contains("exceeds data bounds"));
+        assert!(matches!(err, Error::LinkOutOfBounds { .. }));
     }
 
     #[test]
@@ -179,8 +185,13 @@ mod tests {
         };
 
         let err = data.get_at(link).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Link range (offset: 98, length: 3) exceeds data bounds (100)"));
+        assert_eq!(
+            err,
+            Error::LinkOutOfBounds {
+                offset: 98,
+                length: 3,
+                capacity: 100
+            }
+        );
     }
 }

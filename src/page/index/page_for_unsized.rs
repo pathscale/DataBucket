@@ -14,7 +14,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::page::index::IndexPageUtility;
-use crate::page::{PageId, PageOverflowError};
+use crate::page::PageId;
 use crate::{align8, VariableSizeMeasurable};
 use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE};
 use crate::{Link, Persistable};
@@ -47,7 +47,7 @@ pub struct UnsizedIndexPageUtility<T: Default + SizeMeasurable + VariableSizeMea
 }
 
 impl<T: Default + SizeMeasurable + VariableSizeMeasurable> UnsizedIndexPageUtility<T> {
-    pub fn update_node_id(&mut self, node_id: IndexValue<T>) -> eyre::Result<()> {
+    pub fn update_node_id(&mut self, node_id: IndexValue<T>) -> crate::error::Result<()> {
         self.node_id_size = node_id.aligned_size() as u16;
         self.node_id = node_id;
 
@@ -72,7 +72,7 @@ where
     async fn parse_index_page_utility(
         file: &mut File,
         page_id: PageId,
-    ) -> eyre::Result<Self::Utility> {
+    ) -> crate::error::Result<Self::Utility> {
         seek_to_page_start(file, page_id.0).await?;
         let offset = GENERAL_HEADER_SIZE as i64;
         file.seek(SeekFrom::Current(offset)).await?;
@@ -84,7 +84,9 @@ where
         let archived = crate::access_archived::<<u16 as Archive>::Archived>(
             &slot_size_bytes[0..UnsizedIndexPageUtility::<T>::slots_size_size()],
         )
-        .map_err(|error| eyre::eyre!("torn or corrupt unsized index page (slots size): {error}"))?;
+        .map_err(|_| crate::error::Error::Corrupt {
+            what: "unsized index page slots size",
+        })?;
         let slots_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
         let mut node_id_size_bytes = vec![0u8; UnsizedIndexPageUtility::<T>::node_id_size_size()];
@@ -92,8 +94,8 @@ where
         let archived = crate::access_archived::<<u16 as Archive>::Archived>(
             &node_id_size_bytes[0..UnsizedIndexPageUtility::<T>::node_id_size_size()],
         )
-        .map_err(|error| {
-            eyre::eyre!("torn or corrupt unsized index page (node id size): {error}")
+        .map_err(|_error| crate::error::Error::Corrupt {
+            what: "unsized index page node id size",
         })?;
         let node_id_size =
             rkyv::deserialize::<u16, rkyv::rancor::Error>(archived).expect("data should be valid");
@@ -128,7 +130,7 @@ where
     <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
         + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>,
 {
-    pub fn new(node_id: IndexValue<T>) -> eyre::Result<Self> {
+    pub fn new(node_id: IndexValue<T>) -> crate::error::Result<Self> {
         let len = node_id.aligned_size() as u32;
         Ok(Self {
             slots_size: 1,
@@ -200,7 +202,7 @@ where
         page_id: PageId,
         current_offset: u32,
         value: IndexValue<T>,
-    ) -> eyre::Result<u32>
+    ) -> crate::error::Result<u32>
     where
         T: Archive
             + Eq
@@ -218,11 +220,11 @@ where
         // page end: once it passes the inner-page budget the write would
         // land in this page's header, or before it in the previous page.
         if offset > INNER_PAGE_SIZE as u64 {
-            return Err(eyre::Report::new(PageOverflowError {
-                page_id,
-                data_length: offset as usize,
+            return Err(crate::error::Error::PageOverflow {
+                page: page_id,
+                needed: offset as usize,
                 capacity: INNER_PAGE_SIZE,
-            }));
+            });
         }
 
         // We seek to page's end and will write values from tail.
@@ -233,7 +235,7 @@ where
         Ok(offset as u32)
     }
 
-    async fn read_value(file: &mut File, len: u16) -> eyre::Result<IndexValue<T>>
+    async fn read_value(file: &mut File, len: u16) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -250,7 +252,9 @@ where
         v.extend_from_slice(bytes.as_slice());
         // Validated: a torn index entry must be an error, not a dangling link.
         let archived = crate::access_archived::<<IndexValue<T> as Archive>::Archived>(&v[..])
-            .map_err(|error| eyre::eyre!("torn or corrupt unsized index entry: {error}"))?;
+            .map_err(|_| crate::error::Error::Corrupt {
+                what: "unsized index entry",
+            })?;
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
@@ -259,7 +263,7 @@ where
         page_id: PageId,
         offset: u32,
         len: u16,
-    ) -> eyre::Result<IndexValue<T>>
+    ) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -386,7 +390,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::page::PageOverflowError;
     use crate::{IndexValue, Link, Persistable, UnsizedIndexPage, INNER_PAGE_SIZE};
 
     #[tokio::test]
@@ -428,8 +431,8 @@ mod test {
         .await
         .unwrap_err();
         assert!(
-            err.downcast_ref::<PageOverflowError>().is_some(),
-            "expected PageOverflowError, got: {err}"
+            matches!(err, crate::error::Error::PageOverflow { .. }),
+            "expected a page overflow, got: {err}"
         );
 
         // A huge current offset used to wrap the u32 arithmetic and seek
@@ -443,8 +446,8 @@ mod test {
         .await
         .unwrap_err();
         assert!(
-            err.downcast_ref::<PageOverflowError>().is_some(),
-            "expected PageOverflowError, got: {err}"
+            matches!(err, crate::error::Error::PageOverflow { .. }),
+            "expected a page overflow, got: {err}"
         );
 
         // Nothing was written by the rejected operations.
