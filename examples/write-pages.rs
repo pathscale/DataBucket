@@ -81,9 +81,16 @@ async fn main() {
         bytes as f64 / 1e6
     );
 
+    // **The order of the arms is a variable, so it is one that can be set.**
+    // Run in a fixed order, whichever arm goes second inherits a file the first
+    // arm just wrote and looks faster for it. `REVERSE=1` runs them the other
+    // way round; the two orders agreeing is what makes either number mean
+    // anything.
+    let reverse = std::env::var("REVERSE").is_ok();
     let mut one_at_a_time = Vec::new();
     let mut batched = Vec::new();
-    for _ in 0..REPS {
+
+    let mut run_one = async |timings: &mut Vec<f64>| {
         let mut all = pages();
         let mut file = fresh(&path).await;
         let at = Instant::now();
@@ -91,14 +98,25 @@ async fn main() {
             persist_page(page, &mut file).await.unwrap();
         }
         file.sync_all().await.unwrap();
-        one_at_a_time.push(at.elapsed().as_secs_f64());
-
+        timings.push(at.elapsed().as_secs_f64());
+    };
+    let mut run_batch = async |timings: &mut Vec<f64>| {
         let all = pages();
         let mut file = fresh(&path).await;
         let at = Instant::now();
         persist_pages_batch(all, &mut file).await.unwrap();
         file.sync_all().await.unwrap();
-        batched.push(at.elapsed().as_secs_f64());
+        timings.push(at.elapsed().as_secs_f64());
+    };
+
+    for _ in 0..REPS {
+        if reverse {
+            run_batch(&mut batched).await;
+            run_one(&mut one_at_a_time).await;
+        } else {
+            run_one(&mut one_at_a_time).await;
+            run_batch(&mut batched).await;
+        }
     }
 
     let median = |mut v: Vec<f64>| {
