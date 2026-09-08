@@ -88,7 +88,16 @@ where
     // Returning the length gives them back. Measured over 6,400 pages, about
     // 14% of the write.
     let written = persist_page_in_place(page, file).await?;
-    let padding = PAGE_SIZE - written;
+    // Checked, because a page that wrote more than its slot must not turn into
+    // a `usize` underflow and an absurd seek. The inner length is already
+    // guarded against `INNER_PAGE_SIZE`, so reaching this needs a header that
+    // serialises to more than `GENERAL_HEADER_SIZE`; that cannot happen today
+    // and would be a silent file corruptor if it ever did.
+    let padding = PAGE_SIZE.checked_sub(written).ok_or(Error::PageOverflow {
+        page: page.header.page_id,
+        needed: written,
+        capacity: PAGE_SIZE,
+    })?;
     if padding > 0 {
         file.seek(SeekFrom::Current(padding as i64)).await?;
     }
@@ -147,6 +156,25 @@ where
     // correspond to a stretch of the file. Callers usually pass a contiguous
     // batch and get one write; a caller that does not still gets a correct
     // file, one write per run.
+    //
+    // **The buffer is bounded.** A run of ten thousand pages is 160 MB, and
+    // this runs on a virtual machine whose memory is not ours to spend. A run
+    // longer than `MAX_RUN_PAGES` is flushed in pieces, each still one write,
+    // each still at the right offset.
+    //
+    // **One difference from writing page by page, and it is on disk rather
+    // than in the bytes.** Writing one at a time seeks over the space between
+    // a page's content and the next page's start, and on a filesystem that
+    // supports holes that space is never allocated. Writing a run in one call
+    // puts explicit zeroes there. A file read back is identical either way,
+    // which is what the tests hold; what differs is blocks allocated, and on
+    // `ext4` a file of half-empty pages will now occupy what it claims to.
+    // Data pages are full, so their padding is nothing; index and space pages
+    // are not.
+    /// Pages buffered before a run is flushed regardless of how long it is.
+    /// 512 pages is 8 MiB at the default page size.
+    const MAX_RUN_PAGES: u32 = 512;
+
     let mut iter = pages.into_iter().peekable();
     let mut buffer: Vec<u8> = Vec::new();
     let mut run_start: Option<u32> = None;
@@ -176,7 +204,12 @@ where
         expected_next = id.checked_add(1).ok_or(Error::Corrupt {
             what: "page id overflowed while batching",
         })?;
-        if iter.peek().is_none() {
+
+        // Flush at the end, and before the buffer grows past its bound. The
+        // next page then starts a fresh run at its own offset, which is
+        // correct because that offset is absolute.
+        let run_is_long = id - start + 1 >= MAX_RUN_PAGES;
+        if iter.peek().is_none() || run_is_long {
             flush_run(file, run_start.take(), &mut buffer).await?;
         }
     }
@@ -697,6 +730,42 @@ mod tests {
         );
 
         std::fs::remove_file(&path).unwrap();
+    }
+
+    /// A run longer than the buffer bound is flushed in pieces, and the pieces
+    /// have to join up exactly.
+    ///
+    /// This is the guard on bounding the buffer. The bound exists so a batch of
+    /// ten thousand pages does not become a 160 MB allocation on a virtual
+    /// machine, and the risk it introduces is a seam every 512 pages.
+    #[tokio::test]
+    async fn a_run_longer_than_the_buffer_bound_still_joins_up() {
+        // Comfortably past `MAX_RUN_PAGES`, so at least one seam is crossed.
+        const COUNT: u32 = 520;
+
+        let (one_path, mut one) = scratch("long_run_one_at_a_time").await;
+        for id in 0..COUNT {
+            let mut page = page_at(id, format!("page{id}").as_bytes());
+            super::persist_page(&mut page, &mut one).await.unwrap();
+        }
+        one.sync_all().await.unwrap();
+        drop(one);
+
+        let (many_path, mut many) = scratch("long_run_batched").await;
+        let pages: Vec<_> = (0..COUNT)
+            .map(|id| page_at(id, format!("page{id}").as_bytes()))
+            .collect();
+        persist_pages_batch(pages, &mut many).await.unwrap();
+        many.sync_all().await.unwrap();
+        drop(many);
+
+        let expected = std::fs::read(&one_path).unwrap();
+        let actual = std::fs::read(&many_path).unwrap();
+        assert_eq!(expected.len(), actual.len(), "lengths differ across a seam");
+        assert_eq!(expected, actual, "bytes differ across a seam");
+
+        std::fs::remove_file(&one_path).unwrap();
+        std::fs::remove_file(&many_path).unwrap();
     }
 
     #[tokio::test]
