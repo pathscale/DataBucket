@@ -36,6 +36,27 @@ fn pages() -> Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
         .collect()
 }
 
+/// Pages at every `stride`-th id, which is the shape of an update to a file
+/// that already exists: the ids are not consecutive, so nothing coalesces.
+fn scattered(stride: u32) -> Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+    pages()
+        .into_iter()
+        .enumerate()
+        .filter(|(id, _)| *id as u32 % stride == 0)
+        .map(|(_, page)| page)
+        .collect()
+}
+
+async fn existing(path: &std::path::Path) -> tokio::fs::File {
+    tokio::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)
+        .await
+        .unwrap()
+}
+
 async fn fresh(path: &std::path::Path) -> tokio::fs::File {
     tokio::fs::OpenOptions::new()
         .read(true)
@@ -95,6 +116,63 @@ async fn main() {
         many * 1e3,
         bytes as f64 / 1e6 / many,
         one / many
+    );
+
+    // ---- the case that is not a whole file
+    //
+    // Everything above rewrites the file from empty, so the ids run 0..PAGES
+    // with no gaps and the batch path sees one enormous consecutive run. That
+    // is its best case and a database's rarest one. Updating scattered pages
+    // in a file that already exists breaks the run at every page, so the batch
+    // path falls back to one write per page and can only win by what it saves
+    // per page, not by joining anything up.
+    const STRIDE: u32 = 10;
+    let touched = scattered(STRIDE).len();
+    let touched_bytes = touched * data_bucket::PAGE_SIZE;
+
+    // Lay the whole file down once, outside the clock, so the updates land in
+    // a file that is already the right length.
+    {
+        let mut file = fresh(&path).await;
+        persist_pages_batch(pages(), &mut file).await.unwrap();
+        file.sync_all().await.unwrap();
+    }
+
+    let mut one_scattered = Vec::new();
+    let mut batch_scattered = Vec::new();
+    for _ in 0..REPS {
+        let mut some = scattered(STRIDE);
+        let mut file = existing(&path).await;
+        let at = Instant::now();
+        for page in &mut some {
+            persist_page(page, &mut file).await.unwrap();
+        }
+        file.sync_all().await.unwrap();
+        one_scattered.push(at.elapsed().as_secs_f64());
+
+        let some = scattered(STRIDE);
+        let mut file = existing(&path).await;
+        let at = Instant::now();
+        persist_pages_batch(some, &mut file).await.unwrap();
+        file.sync_all().await.unwrap();
+        batch_scattered.push(at.elapsed().as_secs_f64());
+    }
+
+    let (one_s, many_s) = (median(one_scattered), median(batch_scattered));
+    println!(
+        "\nevery {STRIDE}th page of an existing file, {touched} pages, {:.1} MB",
+        touched_bytes as f64 / 1e6
+    );
+    println!(
+        "  persist_page, one at a time     {:>8.1} ms   {:>6.0} MB/s",
+        one_s * 1e3,
+        touched_bytes as f64 / 1e6 / one_s
+    );
+    println!(
+        "  persist_pages_batch             {:>8.1} ms   {:>6.0} MB/s   {:>5.2}x",
+        many_s * 1e3,
+        touched_bytes as f64 / 1e6 / many_s,
+        one_s / many_s
     );
 
     let _ = std::fs::remove_file(&path);
