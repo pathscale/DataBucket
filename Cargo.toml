@@ -21,12 +21,12 @@ ordered-float = { version = "5.0.0", default-features = false }
 indexset = { package = "WorkTablesIndex", version = "^0.0", default-features = false, features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", path = "../indexset", version = "^0.12", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", version = "^0.12", features = ["concurrent", "cdc", "multimap"] }
-nagoya = { version = "0.1", default-features = false }
+nagoya = { version = "^0.1", default-features = false }
 
 [dev-dependencies]
 # The host file implementation, for tests that need a real file. The library
 # itself takes `nagoya` with no default features, so it names no filesystem.
-nagoya = { version = "0.1", features = ["std"] }
+nagoya = { version = "^0.1", features = ["std"] }
 tokio = { version = "1", features = ["full"] }
 async-fs = "2"
 
@@ -38,14 +38,3 @@ default = ["validate-reads"]
 validate-reads = []
 
 
-# `nagoya` is not published yet, and this crate requires it, so without this the
-# branch resolves nowhere: a reviewer, another clone and CI all fail before they
-# compile a line. The git pin is the same dependency without the machine.
-#
-# Delete this block once nagoya 0.1.0 is on the registry.
-[patch.crates-io]
-nagoya = { git = "https://github.com/pathscale/nagoya", branch = "feat/timers" }
-# `[patch]` only takes effect from the workspace root, so nagoya's own pin on
-# ps-st3 does not reach us here and has to be repeated. Same deletion trigger:
-# ps-st3 0.5.1 on the registry.
-ps-st3 = { git = "https://github.com/pathscale/ps-st3", branch = "perf/skip-the-wake-when-nobody-sleeps" }
