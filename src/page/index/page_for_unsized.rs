@@ -1,6 +1,7 @@
+use nagoya::io::SeekFrom;
 use std::fmt::Debug;
-use std::io::SeekFrom;
 
+use crate::AsyncFile;
 use data_bucket_codegen::Persistable;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -10,13 +11,11 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::page::index::IndexPageUtility;
 use crate::page::PageId;
 use crate::{align8, VariableSizeMeasurable};
-use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE};
+use crate::{seek_to_page_start, IndexValue, SizeMeasurable, GENERAL_HEADER_SIZE};
 use crate::{Link, Persistable};
 
 #[derive(Archive, Clone, Deserialize, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -69,11 +68,11 @@ where
 {
     type Utility = UnsizedIndexPageUtility<T>;
 
-    async fn parse_index_page_utility(
-        file: &mut File,
+    async fn parse_index_page_utility<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
     ) -> crate::error::Result<Self::Utility> {
-        seek_to_page_start(file, page_id.0).await?;
+        seek_to_page_start::<STRIDE>(file, page_id.0).await?;
         let offset = GENERAL_HEADER_SIZE as i64;
         file.seek(SeekFrom::Current(offset)).await?;
 
@@ -197,8 +196,8 @@ where
         new_page
     }
 
-    pub async fn persist_value(
-        file: &mut File,
+    pub async fn persist_value<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
         current_offset: u32,
         value: IndexValue<T>,
@@ -219,23 +218,28 @@ where
         // Values fill the page tail-first, so `offset` counts back from the
         // page end: once it passes the inner-page budget the write would
         // land in this page's header, or before it in the previous page.
-        if offset > INNER_PAGE_SIZE as u64 {
+        //
+        // The budget is this page's own stride, not the crate default. With a
+        // smaller page the default lets the write run back past the header and
+        // into the previous page, silently.
+        let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
+        if offset > capacity as u64 {
             return Err(crate::error::Error::PageOverflow {
                 page: page_id,
                 needed: offset as usize,
-                capacity: INNER_PAGE_SIZE,
+                capacity,
             });
         }
 
         // We seek to page's end and will write values from tail.
-        seek_to_page_start(file, page_id.0 + 1).await?;
+        seek_to_page_start::<STRIDE>(file, page_id.0 + 1).await?;
         file.seek(SeekFrom::Current(-(offset as i64))).await?;
         file.write_all(bytes.as_slice()).await?;
 
         Ok(offset as u32)
     }
 
-    async fn read_value(file: &mut File, len: u16) -> crate::error::Result<IndexValue<T>>
+    async fn read_value(file: &mut impl AsyncFile, len: u16) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -258,8 +262,8 @@ where
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
-    pub async fn read_value_with_offset(
-        file: &mut File,
+    pub async fn read_value_with_offset<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
         offset: u32,
         len: u16,
@@ -274,7 +278,7 @@ where
             rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
         >,
     {
-        seek_to_page_start(file, page_id.0 + 1).await?;
+        seek_to_page_start::<STRIDE>(file, page_id.0 + 1).await?;
         file.seek(SeekFrom::Current(-(offset as i64))).await?;
         Self::read_value(file, len).await
     }
@@ -390,7 +394,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{IndexValue, Link, Persistable, UnsizedIndexPage, INNER_PAGE_SIZE};
+    use crate::{
+        IndexValue, Link, Persistable, UnsizedIndexPage, DEFAULT_PAGE_STRIDE, INNER_PAGE_SIZE,
+    };
 
     #[tokio::test]
     async fn persist_value_rejects_writes_leaving_the_page_slot() {
@@ -398,14 +404,7 @@ mod test {
             "data_bucket_unsized_write_bounds_{}.wt",
             std::process::id()
         ));
-        let mut file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .await
-            .unwrap();
+        let mut file = nagoya::io::create(&path).await.unwrap();
 
         let value = IndexValue::<String> {
             key: "tail_first_value".to_string(),
@@ -413,16 +412,21 @@ mod test {
         };
 
         // An in-bounds tail-first write works.
-        UnsizedIndexPage::<String, 1024>::persist_value(&mut file, 1.into(), 0, value.clone())
-            .await
-            .unwrap();
-        // tokio's File buffers writes; flush so metadata() sees them.
-        tokio::io::AsyncWriteExt::flush(&mut file).await.unwrap();
-        let length_after_valid_write = file.metadata().await.unwrap().len();
+        UnsizedIndexPage::<String, 1024>::persist_value::<DEFAULT_PAGE_STRIDE>(
+            &mut file,
+            1.into(),
+            0,
+            value.clone(),
+        )
+        .await
+        .unwrap();
+        // the async file buffers writes; flush so metadata() sees them.
+        nagoya::io::Write::flush(&mut file).await.unwrap();
+        let length_after_valid_write = nagoya::io::File::length(&mut file).await.unwrap();
 
         // A current offset at the inner budget leaves no room: the write
         // would land in the page header (or the previous page).
-        let err = UnsizedIndexPage::<String, 1024>::persist_value(
+        let err = UnsizedIndexPage::<String, 1024>::persist_value::<DEFAULT_PAGE_STRIDE>(
             &mut file,
             1.into(),
             INNER_PAGE_SIZE as u32,
@@ -437,7 +441,7 @@ mod test {
 
         // A huge current offset used to wrap the u32 arithmetic and seek
         // far outside the page; it must be rejected the same way.
-        let err = UnsizedIndexPage::<String, 1024>::persist_value(
+        let err = UnsizedIndexPage::<String, 1024>::persist_value::<DEFAULT_PAGE_STRIDE>(
             &mut file,
             1.into(),
             u32::MAX - 4,
@@ -452,7 +456,7 @@ mod test {
 
         // Nothing was written by the rejected operations.
         assert_eq!(
-            file.metadata().await.unwrap().len(),
+            nagoya::io::File::length(&mut file).await.unwrap(),
             length_after_valid_write
         );
 

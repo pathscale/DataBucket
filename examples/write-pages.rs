@@ -4,8 +4,14 @@
 //! themselves, on the async file handles they take.
 
 use data_bucket::page::{persist_page, persist_pages_batch};
-use data_bucket::{DataPage, GeneralHeader, GeneralPage, PageType, DATA_VERSION, INNER_PAGE_SIZE};
+use data_bucket::{
+    DataPage, GeneralHeader, GeneralPage, PageType, DATA_VERSION, DEFAULT_PAGE_STRIDE,
+    INNER_PAGE_SIZE,
+};
 use std::time::Instant;
+// The file is a `nagoya::io::File` now, so the trait has to be in scope and
+// the openers come from `nagoya::io` rather than a runtime's own module.
+use nagoya::io::File as _;
 
 const PAGES: u32 = 6_400;
 const REPS: usize = 5;
@@ -47,25 +53,13 @@ fn scattered(stride: u32) -> Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
         .collect()
 }
 
-async fn existing(path: &std::path::Path) -> tokio::fs::File {
-    tokio::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(path)
-        .await
-        .unwrap()
+async fn existing(path: &std::path::Path) -> nagoya::io::HostFile {
+    nagoya::io::open_or_create(path).await.unwrap()
 }
 
-async fn fresh(path: &std::path::Path) -> tokio::fs::File {
-    tokio::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(path)
-        .await
-        .unwrap()
+async fn fresh(path: &std::path::Path) -> nagoya::io::HostFile {
+    let _ = nagoya::io::remove_file(path).await;
+    nagoya::io::create(path).await.unwrap()
 }
 
 #[tokio::main]
@@ -90,21 +84,25 @@ async fn main() {
     let mut one_at_a_time = Vec::new();
     let mut batched = Vec::new();
 
-    let mut run_one = async |timings: &mut Vec<f64>| {
+    let run_one = async |timings: &mut Vec<f64>| {
         let mut all = pages();
         let mut file = fresh(&path).await;
         let at = Instant::now();
         for page in &mut all {
-            persist_page(page, &mut file).await.unwrap();
+            persist_page::<_, DEFAULT_PAGE_STRIDE>(page, &mut file)
+                .await
+                .unwrap();
         }
         file.sync_all().await.unwrap();
         timings.push(at.elapsed().as_secs_f64());
     };
-    let mut run_batch = async |timings: &mut Vec<f64>| {
+    let run_batch = async |timings: &mut Vec<f64>| {
         let all = pages();
         let mut file = fresh(&path).await;
         let at = Instant::now();
-        persist_pages_batch(all, &mut file).await.unwrap();
+        persist_pages_batch::<_, DEFAULT_PAGE_STRIDE>(all, &mut file)
+            .await
+            .unwrap();
         file.sync_all().await.unwrap();
         timings.push(at.elapsed().as_secs_f64());
     };
@@ -152,7 +150,9 @@ async fn main() {
     // a file that is already the right length.
     {
         let mut file = fresh(&path).await;
-        persist_pages_batch(pages(), &mut file).await.unwrap();
+        persist_pages_batch::<_, DEFAULT_PAGE_STRIDE>(pages(), &mut file)
+            .await
+            .unwrap();
         file.sync_all().await.unwrap();
     }
 
@@ -163,7 +163,9 @@ async fn main() {
         let mut file = existing(&path).await;
         let at = Instant::now();
         for page in &mut some {
-            persist_page(page, &mut file).await.unwrap();
+            persist_page::<_, DEFAULT_PAGE_STRIDE>(page, &mut file)
+                .await
+                .unwrap();
         }
         file.sync_all().await.unwrap();
         one_scattered.push(at.elapsed().as_secs_f64());
@@ -171,7 +173,9 @@ async fn main() {
         let some = scattered(STRIDE);
         let mut file = existing(&path).await;
         let at = Instant::now();
-        persist_pages_batch(some, &mut file).await.unwrap();
+        persist_pages_batch::<_, DEFAULT_PAGE_STRIDE>(some, &mut file)
+            .await
+            .unwrap();
         file.sync_all().await.unwrap();
         batch_scattered.push(at.elapsed().as_secs_f64());
     }

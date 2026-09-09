@@ -54,6 +54,14 @@ pub const GENERAL_HEADER_SIZE: usize = 28;
 /// without [`GeneralPage`] page [`GENERAL_HEADER_SIZE`].
 pub const INNER_PAGE_SIZE: usize = PAGE_SIZE - GENERAL_HEADER_SIZE;
 
+/// [`PAGE_SIZE`] as a stride, for the callers that want the crate default.
+///
+/// The seek helpers take their stride as a `u32` const parameter, and a `usize`
+/// constant cannot be converted in generic argument position without
+/// `generic_const_exprs`. This spares every such caller a `{ PAGE_SIZE as u32 }`
+/// block, and names what it is.
+pub const DEFAULT_PAGE_STRIDE: u32 = PAGE_SIZE as u32;
+
 /// Represents page's identifier. Is unique within the table bounds
 #[derive(
     Archive,

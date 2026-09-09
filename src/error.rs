@@ -75,13 +75,20 @@ pub enum Error {
     Encode,
     /// The file would not answer.
     ///
-    /// Held as the raw OS code rather than an `io::Error`, because that type
-    /// is `std` and this one is the reason the crate stops needing it. The
-    /// code is what an operator acts on; the message that came with it says
-    /// nothing the code does not.
+    /// **This used to hold a raw OS code**, taken from `std::io::Error`, with
+    /// the note that the code is what an operator acts on. That was right while
+    /// the crate opened files itself. It no longer does: the file arrives as
+    /// `nagoya::io::File`, whose error is deliberately coarse and carries no OS
+    /// code at all, because a caller either retries, gives up, or creates what
+    /// was missing.
+    ///
+    /// So the kind is carried instead. Mapping it back to `code: None` would
+    /// have compiled and made every failure identical, which is worse than
+    /// losing the number: "no such file" and "permission denied" are the two an
+    /// operator most needs told apart.
     Io {
-        /// `raw_os_error`, when the failure came from the operating system.
-        code: Option<i32>,
+        /// What kind of failure the file reported.
+        kind: nagoya::io::ErrorKind,
     },
     /// A change-data event arrived that this page cannot apply.
     ///
@@ -115,8 +122,7 @@ impl Display for Error {
             ),
             Self::Corrupt { what } => write!(formatter, "torn or corrupt {what}"),
             Self::Encode => write!(formatter, "a value would not archive"),
-            Self::Io { code: Some(code) } => write!(formatter, "the file failed, os error {code}"),
-            Self::Io { code: None } => write!(formatter, "the file failed"),
+            Self::Io { kind } => write!(formatter, "the file failed: {kind:?}"),
             Self::UnapplicableEvent => write!(
                 formatter,
                 "events of `SplitNode`, `CreateNode` or `RemoveNode` cannot be applied to a page"
@@ -127,13 +133,15 @@ impl Display for Error {
 
 impl core::error::Error for Error {}
 
-// Not gated yet: the crate still reaches the file system directly. When that
-// moves behind a trait this impl goes with it.
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io {
-            code: error.raw_os_error(),
-        }
+// The note here used to read "not gated yet: the crate still reaches the file
+// system directly. When that moves behind a trait this impl goes with it."
+// That is what happened. The file is `nagoya::io::File` now, so this converts
+// from its error and `std::io::Error` no longer appears in this crate at all,
+// which is what the module documentation above claims and could not deliver on
+// its own.
+impl From<nagoya::io::Error> for Error {
+    fn from(error: nagoya::io::Error) -> Self {
+        Self::Io { kind: error.kind() }
     }
 }
 
