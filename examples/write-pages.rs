@@ -48,7 +48,7 @@ fn scattered(stride: u32) -> Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     pages()
         .into_iter()
         .enumerate()
-        .filter(|(id, _)| *id as u32 % stride == 0)
+        .filter(|(id, _)| (*id as u32).is_multiple_of(stride))
         .map(|(_, page)| page)
         .collect()
 }
