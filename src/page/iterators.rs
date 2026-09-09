@@ -8,7 +8,7 @@ use crate::{
     IndexData, Link,
 };
 
-use super::{index::{ArchivedIndexValue, IndexValue}, seek_by_link, seek_to_page_start, Interval, SpaceInfo};
+use super::{index::{ArchivedIndexValue, IndexValue}, seek_by_link, seek_to_page_start, Interval, SpaceInfo, PAGE_SIZE};
 
 pub struct LinksIterator<'a> {
     file: &'a mut std::fs::File,
@@ -68,7 +68,7 @@ impl Iterator for LinksIterator<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.links.is_none() {
-            seek_to_page_start(&mut self.file, self.page_id).expect("page should be seekable");
+            seek_to_page_start::<{ PAGE_SIZE as u32 }>(&mut self.file, self.page_id).expect("page should be seekable");
             let header = parse_general_header(&mut self.file).expect("header should be readable");
 
             let mut buffer: Vec<u8> = vec![0u8; header.data_length as usize];
@@ -144,7 +144,7 @@ impl Iterator for DataIterator<'_> {
         }
 
         let current_link = self.links[self.link_index];
-        seek_by_link(&mut self.file, current_link).expect("the seek should be successful");
+        seek_by_link::<{ PAGE_SIZE as u32 }>(&mut self.file, current_link).expect("the seek should be successful");
         let mut buffer = vec![0u8; current_link.length as usize];
         self.file
             .read_exact(&mut buffer)
@@ -174,7 +174,7 @@ mod test {
         create_test_database_file(filename);
 
         let mut file = std::fs::File::open(filename).unwrap();
-        let space_info = parse_space_info::<PAGE_SIZE>(&mut file).unwrap();
+        let space_info = parse_space_info::<{ PAGE_SIZE as u32 }>(&mut file).unwrap();
         let links = LinksIterator::<'_>::new(&mut file, 1, &space_info);
         assert_eq!(
             links.collect::<Vec<_>>(),
@@ -199,7 +199,7 @@ mod test {
         create_test_database_file(filename);
 
         let mut file = std::fs::File::open(filename).unwrap();
-        let space_info = parse_space_info::<PAGE_SIZE>(&mut file).unwrap();
+        let space_info = parse_space_info::<{ PAGE_SIZE as u32 }>(&mut file).unwrap();
         let index_intervals = space_info.primary_key_intervals.clone();
 
         let pages_ids = PageIterator::new(index_intervals).collect::<Vec<_>>();

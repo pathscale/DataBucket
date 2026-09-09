@@ -1,15 +1,14 @@
+use nagoya::io::SeekFrom;
 use std::fmt::Debug;
-use std::io::SeekFrom;
 
+use crate::AsyncFile;
 use indexset::core::multipair::MultiPair;
 use indexset::core::pair::Pair;
 use rkyv::{Archive, Deserialize, Serialize};
-use tokio::fs::File;
-use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 use crate::{
     align, align_to, seek_to_page_start, Link, Persistable, SizeMeasurable, VariableSizeMeasurable,
-    GENERAL_HEADER_SIZE, INNER_PAGE_SIZE,
+    GENERAL_HEADER_SIZE,
 };
 
 mod page;
@@ -29,13 +28,13 @@ pub use table_of_contents_page::{
 pub trait IndexPageUtility<T> {
     type Utility: Persistable + Send + Sync;
 
-    fn parse_index_page_utility(
-        file: &mut File,
+    fn parse_index_page_utility<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
     ) -> impl std::future::Future<Output = crate::error::Result<Self::Utility>> + Send;
 
-    fn persist_index_page_utility(
-        file: &mut File,
+    fn persist_index_page_utility<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
         utility: Self::Utility,
     ) -> impl std::future::Future<Output = crate::error::Result<()>> + Send {
@@ -44,14 +43,15 @@ pub trait IndexPageUtility<T> {
             let utility_length = bytes.as_ref().len();
             // An oversized utility must fail here, in its own persist,
             // instead of writing past the page slot into the neighbor page.
-            if utility_length > INNER_PAGE_SIZE {
+            let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
+            if utility_length > capacity {
                 return Err(crate::error::Error::PageOverflow {
                     page: page_id,
                     needed: utility_length,
-                    capacity: INNER_PAGE_SIZE,
+                    capacity,
                 });
             }
-            seek_to_page_start(file, page_id.0).await?;
+            seek_to_page_start::<STRIDE>(file, page_id.0).await?;
             file.seek(SeekFrom::Current(GENERAL_HEADER_SIZE as i64))
                 .await?;
             file.write_all(bytes.as_ref()).await?;

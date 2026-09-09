@@ -6,8 +6,14 @@
 //! what the two paths cost at the sizes a caller really passes.
 
 use data_bucket::page::{persist_page, persist_pages_batch};
-use data_bucket::{DataPage, GeneralHeader, GeneralPage, PageType, DATA_VERSION, INNER_PAGE_SIZE};
+use data_bucket::{
+    DataPage, GeneralHeader, GeneralPage, PageType, DATA_VERSION, DEFAULT_PAGE_STRIDE,
+    INNER_PAGE_SIZE,
+};
 use std::time::Instant;
+// The file is a `nagoya::io::File` now, so the trait has to be in scope and
+// the openers come from `nagoya::io` rather than a runtime's own module.
+use nagoya::io::File as _;
 
 const SIZES: [usize; 8] = [1, 2, 4, 16, 64, 256, 1024, 6400];
 const REPS: usize = 9;
@@ -29,16 +35,18 @@ fn pages(count: usize) -> Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
                     page_type: PageType::Data,
                     data_length: 0,
                 },
-                inner: DataPage { length: INNER_PAGE_SIZE as u32, data },
+                inner: DataPage {
+                    length: INNER_PAGE_SIZE as u32,
+                    data,
+                },
             }
         })
         .collect()
 }
 
-async fn fresh(path: &std::path::Path) -> tokio::fs::File {
-    tokio::fs::OpenOptions::new()
-        .read(true).write(true).create(true).truncate(true)
-        .open(path).await.unwrap()
+async fn fresh(path: &std::path::Path) -> nagoya::io::HostFile {
+    let _ = nagoya::io::remove_file(path).await;
+    nagoya::io::create(path).await.unwrap()
 }
 
 fn median(mut v: Vec<f64>) -> f64 {
@@ -58,26 +66,41 @@ async fn main() {
         let bytes = count * data_bucket::PAGE_SIZE;
         let (mut ones, mut many) = (Vec::new(), Vec::new());
         // One untimed pass of each, so neither pays for the file appearing.
-        { let mut f = fresh(&path).await; persist_pages_batch(pages(count), &mut f).await.unwrap(); f.sync_all().await.unwrap(); }
+        {
+            let mut f = fresh(&path).await;
+            persist_pages_batch::<_, DEFAULT_PAGE_STRIDE>(pages(count), &mut f)
+                .await
+                .unwrap();
+            f.sync_all().await.unwrap();
+        }
         for _ in 0..REPS {
             let mut all = pages(count);
             let mut file = fresh(&path).await;
             let at = Instant::now();
-            for page in &mut all { persist_page(page, &mut file).await.unwrap(); }
+            for page in &mut all {
+                persist_page::<_, DEFAULT_PAGE_STRIDE>(page, &mut file)
+                    .await
+                    .unwrap();
+            }
             file.sync_all().await.unwrap();
             ones.push(at.elapsed().as_secs_f64());
 
             let all = pages(count);
             let mut file = fresh(&path).await;
             let at = Instant::now();
-            persist_pages_batch(all, &mut file).await.unwrap();
+            persist_pages_batch::<_, DEFAULT_PAGE_STRIDE>(all, &mut file)
+                .await
+                .unwrap();
             file.sync_all().await.unwrap();
             many.push(at.elapsed().as_secs_f64());
         }
         let (one, batch) = (median(ones), median(many));
         println!(
             "  {count:>5}   {:>7.2}      {:>7.2} ms    {:>7.2} ms    {:>5.2}x",
-            bytes as f64 / 1e6, one * 1e3, batch * 1e3, one / batch
+            bytes as f64 / 1e6,
+            one * 1e3,
+            batch * 1e3,
+            one / batch
         );
     }
     let _ = std::fs::remove_file(&path);

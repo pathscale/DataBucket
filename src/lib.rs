@@ -5,6 +5,39 @@ extern crate core;
 extern crate self as data_bucket;
 
 pub mod error;
+
+/// A file this crate can read and write, without naming whose runtime owns it.
+///
+/// **The signatures used to say `async_fs::File`.** That is a concrete type
+/// belonging to one runtime, so every caller inherited that runtime whether it
+/// wanted it or not, and `no_std` was impossible while it was there. Nothing in
+/// this crate ever needed a `File`: the whole surface is `seek`, `read`,
+/// `read_exact` and `write_all`, which are trait methods. `sync_all` and
+/// `metadata` appear only in tests.
+///
+/// **They then came from `futures-io`, and that was wrong for the stated
+/// reason.** The claim above it was that `futures-io` is `no_std` once its
+/// `std` feature comes off. It is not: *every one of its traits sits behind
+/// that feature*, so turning it off leaves the crate exporting nothing at all.
+/// They take `std::io::Error` and `IoSlice`, so there was nowhere else for them
+/// to go.
+///
+/// That is easy to check the wrong way: the crate still *compiles* with the
+/// feature off, so a probe that only builds it reports success, and it is the
+/// exports that vanish. `AsyncFile` was therefore a `std` trait wearing a
+/// portable name, and this crate linked `std` through it however carefully the
+/// rest of it was written.
+///
+/// `nagoya::io` declares the same three traits over an error that is not
+/// `std::io::Error`, and adds the four operations no I/O trait carries, which
+/// this crate had no way to name at all.
+/// `+ Send` because this crate's futures cross a task boundary and the
+/// provided methods on those traits capture `&mut self`, so the future is only
+/// `Send` if the file is.
+pub trait AsyncFile: nagoya::io::File + Send {}
+
+impl<T> AsyncFile for T where T: nagoya::io::File + Send {}
+
 pub mod link;
 pub mod page;
 pub mod persistence;
@@ -20,8 +53,8 @@ pub use page::{
     persist_page, persist_pages_batch, seek_by_link, seek_to_page_start, update_at, DataPage,
     GeneralHeader, GeneralPage, IndexPage, IndexPageUtility, IndexValue, Interval,
     PageOverflowError, PageType, SpaceInfoPage, TableOfContentsOverflowError, TableOfContentsPage,
-    UnsizedIndexPage, UnsizedIndexPageUtility, DATA_VERSION, EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE,
-    GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
+    UnsizedIndexPage, UnsizedIndexPageUtility, DATA_VERSION, DEFAULT_PAGE_STRIDE,
+    EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
 };
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use space::Id as SpaceId;

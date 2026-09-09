@@ -1,10 +1,11 @@
 //! [`crate::page::IndexPage`] definition.
 
+use nagoya::io::SeekFrom;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::io::SeekFrom;
 use std::mem;
 
+use crate::AsyncFile;
 use data_bucket_codegen::Persistable;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -14,14 +15,11 @@ use rkyv::ser::sharing::Share;
 use rkyv::ser::Serializer;
 use rkyv::util::AlignedVec;
 use rkyv::{Archive, Deserialize, Serialize};
-use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::page::index::IndexPageUtility;
 use crate::page::{IndexValue, PageId, PageOverflowError};
 use crate::{
     align, align8, seek_to_page_start, Link, Persistable, SizeMeasurable, GENERAL_HEADER_SIZE,
-    INNER_PAGE_SIZE,
 };
 
 pub fn get_index_page_size_from_data_length<T>(length: usize) -> usize
@@ -85,11 +83,11 @@ where
 {
     type Utility = SizedIndexPageUtility<T>;
 
-    async fn parse_index_page_utility(
-        file: &mut File,
+    async fn parse_index_page_utility<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
     ) -> crate::error::Result<Self::Utility> {
-        seek_to_page_start(file, page_id.0).await?;
+        seek_to_page_start::<STRIDE>(file, page_id.0).await?;
         let offset = GENERAL_HEADER_SIZE as i64;
         file.seek(SeekFrom::Current(offset)).await?;
 
@@ -162,7 +160,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         new_page
     }
 
-    async fn read_value(file: &mut File) -> crate::error::Result<IndexValue<T>>
+    async fn read_value(file: &mut impl AsyncFile) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -185,8 +183,8 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         Ok(rkyv::deserialize(archived).expect("data should be valid"))
     }
 
-    pub async fn read_value_with_index(
-        file: &mut File,
+    pub async fn read_value_with_index<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
         size: usize,
         index: usize,
@@ -201,7 +199,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
             rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>,
         >,
     {
-        seek_to_page_start(file, page_id.0).await?;
+        seek_to_page_start::<STRIDE>(file, page_id.0).await?;
         let offset = Self::get_value_offset(size, index);
         file.seek(SeekFrom::Current(offset as i64)).await?;
         Self::read_value(file).await
@@ -212,17 +210,22 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
     ///
     /// `offset` is relative to the page start and already includes the
     /// general header.
-    fn check_value_write_bounds(
+    /// **The budget is this page's own stride, not the crate default.** With a
+    /// smaller page the default lets a slot write run past the end of the page
+    /// and into its neighbour, which is a silent corruption rather than an
+    /// error: the write succeeds and the next page fails to parse.
+    fn check_value_write_bounds<const STRIDE: u32>(
         page_id: PageId,
         offset: usize,
         value_length: usize,
     ) -> Result<(), PageOverflowError> {
+        let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
         let write_end_in_slot = offset + value_length - GENERAL_HEADER_SIZE;
-        if write_end_in_slot > INNER_PAGE_SIZE {
+        if write_end_in_slot > capacity {
             return Err(PageOverflowError {
                 page_id,
                 data_length: write_end_in_slot,
-                capacity: INNER_PAGE_SIZE,
+                capacity,
             });
         }
         Ok(())
@@ -243,8 +246,8 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         offset
     }
 
-    pub async fn persist_value(
-        file: &mut File,
+    pub async fn persist_value<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
         size: usize,
         value: IndexValue<T>,
@@ -266,8 +269,8 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
     {
         let offset = Self::get_value_offset(size, value_index as usize);
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        Self::check_value_write_bounds(page_id, offset, bytes.len())?;
-        seek_to_page_start(file, page_id.0).await?;
+        Self::check_value_write_bounds::<STRIDE>(page_id, offset, bytes.len())?;
+        seek_to_page_start::<STRIDE>(file, page_id.0).await?;
         file.seek(SeekFrom::Current(offset as i64)).await?;
         file.write_all(bytes.as_slice()).await?;
 
@@ -282,8 +285,8 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         Ok(value_index + 1)
     }
 
-    pub async fn remove_value(
-        file: &mut File,
+    pub async fn remove_value<const STRIDE: u32>(
+        file: &mut impl AsyncFile,
         page_id: PageId,
         size: usize,
         value_index: u16,
@@ -307,8 +310,8 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         let offset = Self::get_value_offset(size, value_index as usize);
         let value = IndexValue::<T>::default();
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&value)?;
-        Self::check_value_write_bounds(page_id, offset, bytes.len())?;
-        seek_to_page_start(file, page_id.0).await?;
+        Self::check_value_write_bounds::<STRIDE>(page_id, offset, bytes.len())?;
+        seek_to_page_start::<STRIDE>(file, page_id.0).await?;
         file.seek(SeekFrom::Current(offset as i64)).await?;
         file.write_all(bytes.as_slice()).await?;
 
@@ -353,7 +356,10 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
 #[cfg(test)]
 mod tests {
     use crate::page::IndexValue;
-    use crate::{get_index_page_size_from_data_length, IndexPage, Persistable, INNER_PAGE_SIZE};
+    use crate::{
+        get_index_page_size_from_data_length, IndexPage, Persistable, DEFAULT_PAGE_STRIDE,
+        INNER_PAGE_SIZE,
+    };
     use uuid::Uuid;
 
     #[test]
@@ -425,14 +431,7 @@ mod tests {
             "data_bucket_slot_write_bounds_{}.wt",
             std::process::id()
         ));
-        let mut file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .await
-            .unwrap();
+        let mut file = nagoya::io::create(&path).await.unwrap();
 
         let value = IndexValue::<u64> {
             key: 7,
@@ -440,26 +439,39 @@ mod tests {
         };
 
         // An in-bounds slot write works.
-        IndexPage::<u64>::persist_value(&mut file, 1.into(), 4, value.clone(), 3)
-            .await
-            .unwrap();
-        // tokio's File buffers writes; flush so metadata() sees them.
-        tokio::io::AsyncWriteExt::flush(&mut file).await.unwrap();
-        let length_after_valid_write = file.metadata().await.unwrap().len();
+        IndexPage::<u64>::persist_value::<DEFAULT_PAGE_STRIDE>(
+            &mut file,
+            1.into(),
+            4,
+            value.clone(),
+            3,
+        )
+        .await
+        .unwrap();
+        // the async file buffers writes; flush so metadata() sees them.
+        nagoya::io::Write::flush(&mut file).await.unwrap();
+        let length_after_valid_write = nagoya::io::File::length(&mut file).await.unwrap();
 
         // A value index whose slot lies past the page must be rejected
         // before anything is written.
-        let err = IndexPage::<u64>::persist_value(&mut file, 1.into(), 4, value, 2000)
-            .await
-            .unwrap_err();
+        let err = IndexPage::<u64>::persist_value::<DEFAULT_PAGE_STRIDE>(
+            &mut file,
+            1.into(),
+            4,
+            value,
+            2000,
+        )
+        .await
+        .unwrap_err();
         assert!(
             matches!(err, crate::error::Error::PageOverflow { .. }),
             "expected a page overflow, got: {err}"
         );
 
-        let err = IndexPage::<u64>::remove_value(&mut file, 1.into(), 4, 2000)
-            .await
-            .unwrap_err();
+        let err =
+            IndexPage::<u64>::remove_value::<DEFAULT_PAGE_STRIDE>(&mut file, 1.into(), 4, 2000)
+                .await
+                .unwrap_err();
         assert!(
             matches!(err, crate::error::Error::PageOverflow { .. }),
             "expected a page overflow, got: {err}"
@@ -473,11 +485,9 @@ mod tests {
             current_length: 0,
             slots: vec![0u16; 20_000],
         };
-        let err = <IndexPage<u64> as IndexPageUtility<u64>>::persist_index_page_utility(
-            &mut file,
-            1.into(),
-            utility,
-        )
+        let err = <IndexPage<u64> as IndexPageUtility<u64>>::persist_index_page_utility::<
+            DEFAULT_PAGE_STRIDE,
+        >(&mut file, 1.into(), utility)
         .await
         .unwrap_err();
         assert!(
@@ -487,7 +497,7 @@ mod tests {
 
         // Nothing was written by the rejected operations.
         assert_eq!(
-            file.metadata().await.unwrap().len(),
+            nagoya::io::File::length(&mut file).await.unwrap(),
             length_after_valid_write
         );
 
