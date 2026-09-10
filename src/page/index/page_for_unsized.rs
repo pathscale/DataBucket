@@ -1,7 +1,7 @@
 use nagoya::io::SeekFrom;
 use std::fmt::Debug;
 
-use crate::AsyncFile;
+use crate::{AsyncFile, AsyncRead};
 use data_bucket_codegen::Persistable;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -69,7 +69,7 @@ where
     type Utility = UnsizedIndexPageUtility<T>;
 
     async fn parse_index_page_utility<const STRIDE: u32>(
-        file: &mut impl AsyncFile,
+        file: &mut impl AsyncRead,
         page_id: PageId,
     ) -> crate::error::Result<Self::Utility> {
         seek_to_page_start::<STRIDE>(file, page_id.0).await?;
@@ -222,7 +222,7 @@ where
         // The budget is this page's own stride, not the crate default. With a
         // smaller page the default lets the write run back past the header and
         // into the previous page, silently.
-        let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
+        let capacity = crate::page::util::page_capacity::<STRIDE>(page_id)?;
         if offset > capacity as u64 {
             return Err(crate::error::Error::PageOverflow {
                 page: page_id,
@@ -239,7 +239,7 @@ where
         Ok(offset as u32)
     }
 
-    async fn read_value(file: &mut impl AsyncFile, len: u16) -> crate::error::Result<IndexValue<T>>
+    async fn read_value(file: &mut impl AsyncRead, len: u16) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -263,7 +263,7 @@ where
     }
 
     pub async fn read_value_with_offset<const STRIDE: u32>(
-        file: &mut impl AsyncFile,
+        file: &mut impl AsyncRead,
         page_id: PageId,
         offset: u32,
         len: u16,

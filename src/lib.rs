@@ -28,15 +28,23 @@ pub mod error;
 /// portable name, and this crate linked `std` through it however carefully the
 /// rest of it was written.
 ///
-/// `nagoya::io` declares the same three traits over an error that is not
-/// `std::io::Error`, and adds the four operations no I/O trait carries, which
-/// this crate had no way to name at all.
+/// `nagoya::io` declares these traits over a portable error. Durability and
+/// file-management methods belong to the storage engine, not page framing.
 /// `+ Send` because this crate's futures cross a task boundary and the
 /// provided methods on those traits capture `&mut self`, so the future is only
 /// `Send` if the file is.
-pub trait AsyncFile: nagoya::io::File + Send {}
+pub trait AsyncFile: AsyncRead + AsyncWrite {}
 
-impl<T> AsyncFile for T where T: nagoya::io::File + Send {}
+impl<T: ?Sized> AsyncFile for T where T: AsyncRead + AsyncWrite {}
+
+/// Read/seek capabilities needed by page decoders; no write permission or
+/// durability implementation is required.
+pub trait AsyncRead: nagoya::io::Read + nagoya::io::Seek + Send {}
+impl<T: ?Sized> AsyncRead for T where T: nagoya::io::Read + nagoya::io::Seek + Send {}
+
+/// Write/seek capabilities needed by page encoders.
+pub trait AsyncWrite: nagoya::io::Write + nagoya::io::Seek + Send {}
+impl<T: ?Sized> AsyncWrite for T where T: nagoya::io::Write + nagoya::io::Seek + Send {}
 
 pub mod link;
 pub mod page;

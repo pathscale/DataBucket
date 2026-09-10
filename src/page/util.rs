@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::AsyncFile;
+use crate::{AsyncRead, AsyncWrite};
 use nagoya::io::SeekFrom;
 use rkyv::api::high::HighDeserializer;
 use rkyv::Archive;
@@ -9,6 +9,28 @@ use crate::page::header::GeneralHeader;
 use crate::page::ty::PageType;
 use crate::page::PageId;
 use crate::{DataPage, GeneralPage, Link, Persistable, GENERAL_HEADER_SIZE};
+
+pub(crate) fn page_capacity<const STRIDE: u32>(page: PageId) -> crate::error::Result<usize> {
+    (STRIDE as usize)
+        .checked_sub(GENERAL_HEADER_SIZE)
+        .ok_or(Error::PageOverflow {
+            page,
+            needed: GENERAL_HEADER_SIZE,
+            capacity: STRIDE as usize,
+        })
+}
+
+fn validate_layout<const STRIDE: u32>(page: PageId, needed: usize) -> crate::error::Result<usize> {
+    let capacity = page_capacity::<STRIDE>(page)?;
+    if needed > capacity {
+        return Err(Error::PageOverflow {
+            page,
+            needed,
+            capacity,
+        });
+    }
+    Ok(capacity)
+}
 
 /// Returned when a write into a page would not fit the page slot: letting
 /// it through would spill past a [`PAGE_SIZE`] boundary and corrupt a
@@ -68,7 +90,7 @@ pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
 
 pub async fn persist_page<'a, T, const STRIDE: u32>(
     page: &'a mut GeneralPage<T>,
-    file: &'a mut impl AsyncFile,
+    file: &'a mut impl AsyncWrite,
 ) -> crate::error::Result<()>
 where
     T: Persistable + Send + Sync,
@@ -107,7 +129,7 @@ where
 /// ended up costs a system call for something computed two lines above.
 async fn persist_page_in_place<'a, T, const STRIDE: u32>(
     page: &'a mut GeneralPage<T>,
-    file: &'a mut impl AsyncFile,
+    file: &'a mut impl AsyncWrite,
 ) -> crate::error::Result<usize>
 where
     T: Persistable + Send + Sync,
@@ -119,7 +141,7 @@ where
     // stride less its header, not the crate default: a table writing a larger
     // page must be allowed to fill it, and a table writing a smaller one must
     // be stopped before it overruns.
-    let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
+    let capacity = page_capacity::<STRIDE>(page.header.page_id)?;
     if inner_length > capacity {
         return Err(Error::PageOverflow {
             page: page.header.page_id,
@@ -137,7 +159,7 @@ where
 
 pub async fn persist_pages_batch<T, const STRIDE: u32>(
     pages: Vec<GeneralPage<T>>,
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncWrite,
 ) -> crate::error::Result<()>
 where
     T: Persistable + Send + Sync,
@@ -159,7 +181,7 @@ where
     //
     // **The buffer is bounded.** A run of ten thousand pages is 160 MB, and
     // this runs on a virtual machine whose memory is not ours to spend. A run
-    // longer than `MAX_RUN_PAGES` is flushed in pieces, each still one write,
+    // longer than the byte budget is flushed in pieces, each still one write,
     // each still at the right offset.
     //
     // **One difference from writing page by page, and it is on disk rather
@@ -173,7 +195,9 @@ where
     // are not.
     /// Pages buffered before a run is flushed regardless of how long it is.
     /// 512 pages is 8 MiB at the default page size.
-    const MAX_RUN_PAGES: u32 = 512;
+    const MAX_RUN_BYTES: usize = 8 * 1024 * 1024;
+    page_capacity::<STRIDE>(0.into())?;
+    let max_run_pages = (MAX_RUN_BYTES / STRIDE as usize).clamp(1, 512) as u32;
 
     let mut iter = pages.into_iter().peekable();
     let mut buffer: Vec<u8> = Vec::new();
@@ -208,7 +232,7 @@ where
         // Flush at the end, and before the buffer grows past its bound. The
         // next page then starts a fresh run at its own offset, which is
         // correct because that offset is absolute.
-        let run_is_long = id - start + 1 >= MAX_RUN_PAGES;
+        let run_is_long = id - start + 1 >= max_run_pages;
         if iter.peek().is_none() || run_is_long {
             flush_run::<STRIDE>(file, run_start.take(), &mut buffer).await?;
         }
@@ -219,7 +243,7 @@ where
 
 /// Write an accumulated run of pages at the offset its first page names.
 async fn flush_run<const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncWrite,
     run_start: Option<u32>,
     buffer: &mut Vec<u8>,
 ) -> crate::error::Result<()> {
@@ -248,7 +272,7 @@ where
     let inner_bytes = page.inner.as_bytes();
     let inner_length = inner_bytes.as_ref().len();
     // Same budget as the file path: this page's own stride less its header.
-    let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
+    let capacity = page_capacity::<STRIDE>(page.header.page_id)?;
     if inner_length > capacity {
         return Err(Error::PageOverflow {
             page: page.header.page_id,
@@ -275,18 +299,27 @@ pub(crate) fn page_start_offset<const STRIDE: u32>(index: u32) -> u64 {
 }
 
 pub async fn seek_to_page_start<const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut (impl nagoya::io::Seek + Send),
     index: u32,
 ) -> crate::error::Result<()> {
+    page_capacity::<STRIDE>(index.into())?;
     file.seek(SeekFrom::Start(page_start_offset::<STRIDE>(index)))
         .await?;
     Ok(())
 }
 
 pub async fn seek_by_link<const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut (impl nagoya::io::Seek + Send),
     link: Link,
 ) -> crate::error::Result<()> {
+    let capacity = page_capacity::<STRIDE>(link.page_id)?;
+    if u64::from(link.offset) + u64::from(link.length) > capacity as u64 {
+        return Err(Error::LinkOutOfBounds {
+            offset: link.offset,
+            length: link.length,
+            capacity,
+        });
+    }
     file.seek(SeekFrom::Start(
         page_start_offset::<STRIDE>(link.page_id.0)
             + GENERAL_HEADER_SIZE as u64
@@ -298,11 +331,12 @@ pub async fn seek_by_link<const STRIDE: u32>(
 }
 
 pub async fn update_at<const DATA_LENGTH: u32, const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncWrite,
     link: Link,
     new_data: &[u8],
 ) -> crate::error::Result<()> {
-    if new_data.len() as u32 != link.length {
+    validate_layout::<STRIDE>(link.page_id, DATA_LENGTH as usize)?;
+    if new_data.len() != link.length as usize {
         return Err(Error::LinkLengthMismatch {
             expected: link.length,
             found: new_data.len(),
@@ -325,7 +359,7 @@ pub async fn update_at<const DATA_LENGTH: u32, const STRIDE: u32>(
 }
 
 pub async fn parse_general_header(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
 ) -> crate::error::Result<GeneralHeader> {
     let mut buffer = [0; GENERAL_HEADER_SIZE];
     file.read_exact(&mut buffer).await?;
@@ -344,7 +378,7 @@ pub async fn parse_general_header(
 }
 
 pub async fn parse_page<Page, const INNER_PAGE_SIZE: u32, const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
     index: u32,
 ) -> crate::error::Result<GeneralPage<Page>>
 where
@@ -352,12 +386,13 @@ where
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
 {
+    validate_layout::<STRIDE>(index.into(), INNER_PAGE_SIZE as usize)?;
     seek_to_page_start::<STRIDE>(file, index).await?;
     parse_page_in_place::<Page, INNER_PAGE_SIZE>(file).await
 }
 
 async fn parse_page_in_place<Page, const INNER_PAGE_SIZE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
 ) -> crate::error::Result<GeneralPage<Page>>
 where
     Page: rkyv::Archive + Persistable,
@@ -370,6 +405,13 @@ where
     } else {
         header.data_length
     };
+    if length > INNER_PAGE_SIZE {
+        return Err(Error::PageOverflow {
+            page: header.page_id,
+            needed: length as usize,
+            capacity: INNER_PAGE_SIZE as usize,
+        });
+    }
 
     let mut buffer: Vec<u8> = vec![0u8; length as usize];
     file.read_exact(&mut buffer).await?;
@@ -382,7 +424,7 @@ where
 }
 
 pub async fn parse_pages_batch<Page, const PAGE_SIZE: u32, const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
     indexes: Vec<u32>,
 ) -> crate::error::Result<Vec<GeneralPage<Page>>>
 where
@@ -390,6 +432,7 @@ where
     <Page as rkyv::Archive>::Archived:
         rkyv::Deserialize<Page, HighDeserializer<rkyv::rancor::Error>>,
 {
+    validate_layout::<STRIDE>(0.into(), PAGE_SIZE as usize)?;
     let mut iter = indexes.into_iter();
     if let Some(index) = iter.next() {
         let mut pages = vec![];
@@ -410,7 +453,7 @@ where
 }
 
 pub async fn parse_general_header_by_index<const STRIDE: u32>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
     index: u32,
 ) -> crate::error::Result<GeneralHeader> {
     seek_to_page_start::<STRIDE>(file, index).await?;
@@ -424,19 +467,27 @@ pub async fn parse_data_page<
     const INNER_PAGE_SIZE: usize,
     const STRIDE: u32,
 >(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
     index: u32,
 ) -> crate::error::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
+    validate_layout::<STRIDE>(index.into(), INNER_PAGE_SIZE)?;
     seek_to_page_start::<STRIDE>(file, index).await?;
     parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await
 }
 
 async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
 ) -> crate::error::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     let header = parse_general_header(file).await?;
 
     let mut buffer = [0u8; INNER_PAGE_SIZE];
+    if header.data_length as usize > INNER_PAGE_SIZE {
+        return Err(Error::PageOverflow {
+            page: header.page_id,
+            needed: header.data_length as usize,
+            capacity: INNER_PAGE_SIZE,
+        });
+    }
     if header.next_id == 0.into() {
         #[allow(clippy::unused_io_amount)]
         file.read(&mut buffer).await?;
@@ -460,9 +511,10 @@ pub async fn parse_data_pages_batch<
     const INNER_PAGE_SIZE: usize,
     const STRIDE: u32,
 >(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
     indexes: Vec<u32>,
 ) -> crate::error::Result<Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>>> {
+    validate_layout::<STRIDE>(0.into(), INNER_PAGE_SIZE)?;
     let mut iter = indexes.into_iter();
     if let Some(index) = iter.next() {
         let mut pages = vec![];
@@ -507,7 +559,7 @@ pub async fn parse_data_pages_batch<
 // }
 
 pub async fn parse_space_info<const PAGE_SIZE: usize>(
-    file: &mut impl AsyncFile,
+    file: &mut impl AsyncRead,
 ) -> crate::error::Result<SpaceInfoPage> {
     file.seek(SeekFrom::Start(0)).await?;
     let header = parse_general_header(file).await?;
