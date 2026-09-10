@@ -1,7 +1,7 @@
 use nagoya::io::SeekFrom;
 use std::fmt::Debug;
 
-use crate::AsyncFile;
+use crate::{AsyncFile, AsyncRead};
 use indexset::core::multipair::MultiPair;
 use indexset::core::pair::Pair;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -29,7 +29,7 @@ pub trait IndexPageUtility<T> {
     type Utility: Persistable + Send + Sync;
 
     fn parse_index_page_utility<const STRIDE: u32>(
-        file: &mut impl AsyncFile,
+        file: &mut impl AsyncRead,
         page_id: PageId,
     ) -> impl std::future::Future<Output = crate::error::Result<Self::Utility>> + Send;
 
@@ -43,7 +43,7 @@ pub trait IndexPageUtility<T> {
             let utility_length = bytes.as_ref().len();
             // An oversized utility must fail here, in its own persist,
             // instead of writing past the page slot into the neighbor page.
-            let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
+            let capacity = crate::page::util::page_capacity::<STRIDE>(page_id)?;
             if utility_length > capacity {
                 return Err(crate::error::Error::PageOverflow {
                     page: page_id,

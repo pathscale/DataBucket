@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::mem;
 
-use crate::AsyncFile;
+use crate::{AsyncFile, AsyncRead};
 use data_bucket_codegen::Persistable;
 use indexset::core::pair::Pair;
 use rkyv::de::Pool;
@@ -35,14 +35,13 @@ where
     let slots_vec_size = IndexPage::<T>::slots_size(0);
     let index_values_vec_size = IndexPage::<T>::slots_size(0);
 
-    (length
-        - node_id_size
-        - size_field_size
-        - current_index_size
-        - current_length_size
-        - slots_vec_size
-        - index_values_vec_size)
-        / (slot_size + index_value_size)
+    let overhead = node_id_size
+        + size_field_size
+        + current_index_size
+        + current_length_size
+        + slots_vec_size
+        + index_values_vec_size;
+    (length.saturating_sub(overhead) / (slot_size + index_value_size)).min(usize::from(u16::MAX))
 }
 
 /// Represents a page, which is filled with [`IndexValue`]'s of some index.
@@ -84,7 +83,7 @@ where
     type Utility = SizedIndexPageUtility<T>;
 
     async fn parse_index_page_utility<const STRIDE: u32>(
-        file: &mut impl AsyncFile,
+        file: &mut impl AsyncRead,
         page_id: PageId,
     ) -> crate::error::Result<Self::Utility> {
         seek_to_page_start::<STRIDE>(file, page_id.0).await?;
@@ -122,6 +121,10 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
     where
         T: Clone,
     {
+        assert!(
+            size <= usize::from(u16::MAX),
+            "index page slot count exceeds its u16 format"
+        );
         let slots = vec![0u16; size];
         let index_values = vec![IndexValue::default(); size];
         Self {
@@ -160,7 +163,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         new_page
     }
 
-    async fn read_value(file: &mut impl AsyncFile) -> crate::error::Result<IndexValue<T>>
+    async fn read_value(file: &mut impl AsyncRead) -> crate::error::Result<IndexValue<T>>
     where
         T: Archive,
         <T as Archive>::Archived: Deserialize<T, Strategy<Pool, rkyv::rancor::Error>>
@@ -184,7 +187,7 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
     }
 
     pub async fn read_value_with_index<const STRIDE: u32>(
-        file: &mut impl AsyncFile,
+        file: &mut impl AsyncRead,
         page_id: PageId,
         size: usize,
         index: usize,
@@ -219,8 +222,22 @@ impl<T: Default + SizeMeasurable> IndexPage<T> {
         offset: usize,
         value_length: usize,
     ) -> Result<(), PageOverflowError> {
-        let capacity = STRIDE as usize - GENERAL_HEADER_SIZE;
-        let write_end_in_slot = offset + value_length - GENERAL_HEADER_SIZE;
+        let capacity =
+            (STRIDE as usize)
+                .checked_sub(GENERAL_HEADER_SIZE)
+                .ok_or(PageOverflowError {
+                    page_id,
+                    data_length: GENERAL_HEADER_SIZE,
+                    capacity: STRIDE as usize,
+                })?;
+        let write_end_in_slot = offset
+            .checked_add(value_length)
+            .and_then(|end| end.checked_sub(GENERAL_HEADER_SIZE))
+            .ok_or(PageOverflowError {
+                page_id,
+                data_length: usize::MAX,
+                capacity,
+            })?;
         if write_end_in_slot > capacity {
             return Err(PageOverflowError {
                 page_id,
