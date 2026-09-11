@@ -1,10 +1,11 @@
+use alloc::string::String;
 pub mod rkyv_data;
 mod types;
 mod util;
 
 pub use types::DataTypeValue;
 
-use std::fmt;
+use core::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataDecodeError {
@@ -51,7 +52,7 @@ impl fmt::Display for DataDecodeError {
     }
 }
 
-impl std::error::Error for DataDecodeError {}
+impl core::error::Error for DataDecodeError {}
 
 pub trait DataType {
     /// Advances an offset past this type, including its required padding.

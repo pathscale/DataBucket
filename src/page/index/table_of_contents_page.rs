@@ -1,7 +1,8 @@
+use alloc::collections::btree_map::Entry;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
+use core::fmt::Debug;
 use rkyv::{Archive, Deserialize, Serialize};
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
-use std::fmt::Debug;
 
 use crate::page::PageId;
 use crate::{align, align_to, Persistable, SizeMeasurable, INNER_PAGE_SIZE};
@@ -9,7 +10,7 @@ use crate::{align, align_to, Persistable, SizeMeasurable, INNER_PAGE_SIZE};
 /// Serialized size of a [`TableOfContentsPage`] with no records and no
 /// empty pages: the `estimated_size` field itself plus the two empty
 /// vectors.
-pub const EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE: usize = std::mem::size_of::<usize>() + 12;
+pub const EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE: usize = core::mem::size_of::<usize>() + 12;
 
 /// Error returned by the capacity-checked mutators of
 /// [`TableOfContentsPage`] when adding a record would push the page's
@@ -44,8 +45,8 @@ impl<T> TableOfContentsOverflowError<T> {
     }
 }
 
-impl<T> std::fmt::Display for TableOfContentsOverflowError<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T> core::fmt::Display for TableOfContentsOverflowError<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "table of contents record of {} bytes does not fit the page \
@@ -55,7 +56,7 @@ impl<T> std::fmt::Display for TableOfContentsOverflowError<T> {
     }
 }
 
-impl<T: Debug> std::error::Error for TableOfContentsOverflowError<T> {}
+impl<T: Debug> core::error::Error for TableOfContentsOverflowError<T> {}
 
 #[derive(Archive, Clone, Deserialize, Debug, Serialize)]
 pub struct TableOfContentsPage<T: Ord + Eq> {
@@ -407,6 +408,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::{Link, Persistable, TableOfContentsPage, INNER_PAGE_SIZE};
+    use std::prelude::v1::*;
 
     fn link(offset: u32) -> Link {
         Link {

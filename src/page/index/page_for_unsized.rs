@@ -1,5 +1,6 @@
+use alloc::vec::Vec;
+use core::fmt::Debug;
 use nagoya::io::SeekFrom;
-use std::fmt::Debug;
 
 use crate::{AsyncFile, AsyncRead};
 use data_bucket_codegen::Persistable;
@@ -397,6 +398,7 @@ mod test {
     use crate::{
         IndexValue, Link, Persistable, UnsizedIndexPage, DEFAULT_PAGE_STRIDE, INNER_PAGE_SIZE,
     };
+    use std::prelude::v1::*;
 
     #[tokio::test]
     async fn persist_value_rejects_writes_leaving_the_page_slot() {

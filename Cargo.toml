@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
@@ -12,12 +13,12 @@ description = "DataBucket is container for WorkTable's data"
 
 [dependencies]
 crc32fast = { version = "1", default-features = false }
-data_bucket_derive = { path = "codegen", version = "^0.3" }
+data_bucket_derive = { path = "codegen", version = "^0.3.18" }
 
 derive_more = { version = "1.0.0", default-features = false, features = ["from", "error", "display", "into"] }
 rkyv = { version = "0.8.17", default-features = false, features = ["alloc", "bytecheck", "uuid-1"] }
-uuid = { version = "1.11.0", default-features = false, features = ["v4"] }
-psc-nanoid = { version = "3.1.1", features = ["rkyv", "packed"] }
+uuid = { version = "^1", default-features = false }
+psc-nanoid = { version = "^3.2.0", default-features = false, features = ["rkyv", "packed"] }
 ordered-float = { version = "5.0.0", default-features = false }
 indexset = { package = "WorkTablesIndex", version = "^0.0, >=0.0.14", default-features = false, features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", path = "../indexset", version = "^0.12", features = ["concurrent", "cdc", "multimap"] }
@@ -25,6 +26,8 @@ indexset = { package = "WorkTablesIndex", version = "^0.0, >=0.0.14", default-fe
 nagoya = { version = "^0.1", default-features = false }
 
 [dev-dependencies]
+uuid = { version = "^1", features = ["v4"] }
+psc-nanoid = { version = "^3.2.0", features = ["rkyv", "packed"] }
 # The host file implementation, for tests that need a real file. The library
 # itself takes `nagoya` with no default features, so it names no filesystem.
 nagoya = { version = "^0.1", features = ["std"] }

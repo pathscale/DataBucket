@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use crate::Link;
 use crate::Persistable;
+use alloc::vec::Vec;
 
 #[derive(Debug)]
 pub struct DataPage<const DATA_LENGTH: usize> {

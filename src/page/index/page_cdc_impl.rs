@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 use indexset::cdc::change::ChangeEvent;
 use indexset::core::pair::Pair;

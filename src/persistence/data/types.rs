@@ -1,4 +1,5 @@
-use std::str::FromStr;
+use alloc::{borrow::ToOwned, string::String, string::ToString};
+use core::str::FromStr;
 
 use derive_more::derive::Display;
 use derive_more::From;

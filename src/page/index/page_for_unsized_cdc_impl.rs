@@ -119,6 +119,7 @@ mod test {
     use crate::{IndexValue, Link, UnsizedIndexPage};
     use indexset::cdc::change::ChangeEvent;
     use indexset::core::pair::Pair;
+    use std::prelude::v1::*;
 
     #[test]
     fn test_insert_at() {

@@ -31,8 +31,17 @@ and cannot be treated as ordinary DataBucket space files.
 
 CRC validation detects damaged data pages; it does not provide a transaction
 log, atomic multi-file commits or crash repair. WorkTable owns synchronization
-and durability policy. DataBucket itself still requires Rust std, despite its
-portable I/O traits.
+and durability policy.
+
+The library is `no_std` with `alloc`, including its default `validate-reads`
+feature. It uses Nagoya's portable I/O traits and requires an allocator. The
+concurrent index dependency uses OS services through libc on supported targets;
+`no_std` does not imply a bare-metal implementation. The command line tools and
+host tests use std.
+
+Run `sh scripts/check-no-std.sh -p data_bucket --lib` to verify the default
+library graph with Rust std removed from the target sysroot. Build scripts and
+proc macros retain their normal host environment.
 
 ## Command line tools
 

@@ -35,7 +35,7 @@ impl EnumGenerator {
                 <#enum_ident as rkyv::Archive>::Archived: Sized,
             {
                 fn aligned_size(&self) -> usize {
-                    std::mem::size_of::<<#enum_ident as rkyv::Archive>::Archived>()
+                    core::mem::size_of::<<#enum_ident as rkyv::Archive>::Archived>()
                 }
             }
         })

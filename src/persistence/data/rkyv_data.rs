@@ -1,5 +1,6 @@
 use crate::persistence::data::{DataDecodeError, DataTypeValue};
-use std::str::FromStr;
+use alloc::vec::Vec;
+use core::str::FromStr;
 
 /// Decodes a dynamically described row from an rkyv archive.
 ///
@@ -67,6 +68,7 @@ mod test {
     use crate::persistence::data::{DataDecodeError, DataTypeValue};
     use rkyv::{Archive, Deserialize, Serialize};
     use std::f64::consts::PI;
+    use std::prelude::v1::*;
 
     #[derive(Archive, Serialize, Deserialize, Debug)]
     struct Struct1 {

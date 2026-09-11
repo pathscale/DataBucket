@@ -1,9 +1,10 @@
 //! [`crate::page::IndexPage`] definition.
 
+use alloc::vec::Vec;
+use core::fmt::Debug;
+use core::hash::Hash;
+use core::mem;
 use nagoya::io::SeekFrom;
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::mem;
 
 use crate::{AsyncFile, AsyncRead};
 use data_bucket_codegen::Persistable;
@@ -377,6 +378,7 @@ mod tests {
         get_index_page_size_from_data_length, IndexPage, Persistable, DEFAULT_PAGE_STRIDE,
         INNER_PAGE_SIZE,
     };
+    use std::prelude::v1::*;
     use uuid::Uuid;
 
     #[test]
@@ -402,7 +404,7 @@ mod tests {
     #[test]
     fn test_bytes_128() {
         let size: usize = get_index_page_size_from_data_length::<u128>(INNER_PAGE_SIZE);
-        println!("size: {size}");
+        std::println!("size: {size}");
         let page = IndexPage::<u128>::new(
             IndexValue {
                 key: u128::default(),
