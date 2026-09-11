@@ -1,0 +1,11 @@
+[package]
+name = "data-bucket-no-std-consumer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+data_bucket = { path = "../.." }
+rkyv = { version = "^0.8", default-features = false, features = ["alloc", "bytecheck"] }

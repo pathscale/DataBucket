@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::{AsyncRead, AsyncWrite};
+use alloc::vec::Vec;
 use nagoya::io::SeekFrom;
 use rkyv::api::high::HighDeserializer;
 use rkyv::Archive;
@@ -46,8 +47,8 @@ pub struct PageOverflowError {
     pub capacity: usize,
 }
 
-impl std::fmt::Display for PageOverflowError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for PageOverflowError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "page {} write needs {} bytes, exceeding the {}-byte page slot",
@@ -56,7 +57,7 @@ impl std::fmt::Display for PageOverflowError {
     }
 }
 
-impl std::error::Error for PageOverflowError {}
+impl core::error::Error for PageOverflowError {}
 
 pub fn map_data_pages_to_general<const DATA_LENGTH: usize>(
     pages: Vec<DataPage<DATA_LENGTH>>,
@@ -689,6 +690,7 @@ mod tests {
     use crate::{
         DataPage, GeneralPage, DATA_VERSION, DEFAULT_PAGE_STRIDE, INNER_PAGE_SIZE, PAGE_SIZE,
     };
+    use std::prelude::v1::*;
     // `sync_all` and the rest are trait methods now, not inherent ones, so the
     // trait has to be in scope for a `HostFile` to answer to them.
     use nagoya::io::File as _;

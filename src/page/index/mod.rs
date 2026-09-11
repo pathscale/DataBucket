@@ -1,5 +1,5 @@
+use core::fmt::Debug;
 use nagoya::io::SeekFrom;
-use std::fmt::Debug;
 
 use crate::{AsyncFile, AsyncRead};
 use indexset::core::multipair::MultiPair;
@@ -31,13 +31,13 @@ pub trait IndexPageUtility<T> {
     fn parse_index_page_utility<const STRIDE: u32>(
         file: &mut impl AsyncRead,
         page_id: PageId,
-    ) -> impl std::future::Future<Output = crate::error::Result<Self::Utility>> + Send;
+    ) -> impl core::future::Future<Output = crate::error::Result<Self::Utility>> + Send;
 
     fn persist_index_page_utility<const STRIDE: u32>(
         file: &mut impl AsyncFile,
         page_id: PageId,
         utility: Self::Utility,
-    ) -> impl std::future::Future<Output = crate::error::Result<()>> + Send {
+    ) -> impl core::future::Future<Output = crate::error::Result<()>> + Send {
         async move {
             let bytes = utility.as_bytes();
             let utility_length = bytes.as_ref().len();

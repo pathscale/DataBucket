@@ -1,4 +1,5 @@
 use crate::SizeMeasurable;
+use alloc::{string::String, vec::Vec};
 
 use rkyv::api::high::HighValidator;
 use rkyv::bytecheck::CheckBytes;

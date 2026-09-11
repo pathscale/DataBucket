@@ -2,6 +2,7 @@
 
 use crate::util::Persistable;
 use crate::{space, Link};
+use alloc::{string::String, vec::Vec};
 
 use data_bucket_codegen::Persistable;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -165,6 +166,7 @@ mod test {
     use crate::page::INNER_PAGE_SIZE;
     use crate::util::Persistable;
     use rkyv::Archive;
+    use std::prelude::v1::*;
 
     #[test]
     fn test_as_bytes() {

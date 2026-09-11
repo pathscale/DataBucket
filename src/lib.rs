@@ -1,4 +1,9 @@
-extern crate core;
+#![no_std]
+
+#[macro_use]
+extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
 // The Persistable derive emits paths through the crate name, and this crate
 // uses its own derive: alias ourselves so the generated code resolves here too.
@@ -6,33 +11,11 @@ extern crate self as data_bucket;
 
 pub mod error;
 
-/// A file this crate can read and write, without naming whose runtime owns it.
+/// Read, write and seek capabilities used by page codecs.
 ///
-/// **The signatures used to say `async_fs::File`.** That is a concrete type
-/// belonging to one runtime, so every caller inherited that runtime whether it
-/// wanted it or not, and `no_std` was impossible while it was there. Nothing in
-/// this crate ever needed a `File`: the whole surface is `seek`, `read`,
-/// `read_exact` and `write_all`, which are trait methods. `sync_all` and
-/// `metadata` appear only in tests.
-///
-/// **They then came from `futures-io`, and that was wrong for the stated
-/// reason.** The claim above it was that `futures-io` is `no_std` once its
-/// `std` feature comes off. It is not: *every one of its traits sits behind
-/// that feature*, so turning it off leaves the crate exporting nothing at all.
-/// They take `std::io::Error` and `IoSlice`, so there was nowhere else for them
-/// to go.
-///
-/// That is easy to check the wrong way: the crate still *compiles* with the
-/// feature off, so a probe that only builds it reports success, and it is the
-/// exports that vanish. `AsyncFile` was therefore a `std` trait wearing a
-/// portable name, and this crate linked `std` through it however carefully the
-/// rest of it was written.
-///
-/// `nagoya::io` declares these traits over a portable error. Durability and
-/// file-management methods belong to the storage engine, not page framing.
-/// `+ Send` because this crate's futures cross a task boundary and the
-/// provided methods on those traits capture `&mut self`, so the future is only
-/// `Send` if the file is.
+/// Nagoya declares these traits over a portable error without requiring std.
+/// Durability and file-management methods belong to the storage engine.
+/// Implementations must be `Send` because page I/O can cross a task boundary.
 pub trait AsyncFile: AsyncRead + AsyncWrite {}
 
 impl<T: ?Sized> AsyncFile for T where T: AsyncRead + AsyncWrite {}

@@ -1,9 +1,11 @@
 use crate::link::{Link, LINK_LENGTH};
+use alloc::sync::Arc;
+use alloc::{string::String, vec::Vec};
+use core::mem;
 use ordered_float::OrderedFloat;
 use psc_nanoid::packed::AlphabetPackExt;
 use psc_nanoid::PackedNanoid;
 use rkyv::util::AlignedVec;
-use std::{mem, sync::Arc};
 use uuid::Uuid;
 
 pub const fn align(len: usize) -> usize {
@@ -279,6 +281,7 @@ mod test {
     use crate::util::sized::SizeMeasurable;
     use crate::{IndexValue, Link};
     use rkyv::to_bytes;
+    use std::prelude::v1::*;
     use uuid::Uuid;
 
     #[test]
@@ -311,7 +314,7 @@ mod test {
 
         impl Default for ExpensiveDefault {
             fn default() -> Self {
-                panic!("the sizing override must not construct the default value")
+                core::panic!("the sizing override must not construct the default value")
             }
         }
 
