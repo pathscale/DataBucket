@@ -2,14 +2,16 @@
 # Check a supported OS target with Rust std deliberately absent from its sysroot.
 set -eu
 root=$(pwd)
-target=$(rustc -vV | awk '/^host:/ {print $2}')
+target=${NO_STD_TARGET:-$(rustc -vV | awk '/^host:/ {print $2}')}
 libdir=$(rustc --print target-libdir --target "$target")
-scratch="$root/target/no-std-sysroot"
+scratch="$root/target/no-std-sysroot/$target"
 mkdir -p "$scratch/lib/rustlib/$target/lib"
 for library in "$libdir"/*; do
     name=$(basename "$library")
     case "$name" in
-        libstd-*|libstd_detect-*|libtest-*|libproc_macro-*|librustc_std_workspace_std-*) continue ;;
+        libstd-*|libstd_detect-*|libtest-*|libproc_macro-*|librustc_std_workspace_std-*|std-*|std_detect-*|test-*|proc_macro-*)
+            rm -f "$scratch/lib/rustlib/$target/lib/$name"
+            continue ;;
     esac
     ln -sf "$library" "$scratch/lib/rustlib/$target/lib/$name"
 done
