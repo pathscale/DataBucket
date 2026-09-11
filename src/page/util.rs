@@ -134,7 +134,8 @@ async fn persist_page_in_place<'a, T, const STRIDE: u32>(
 where
     T: Persistable + Send + Sync,
 {
-    let inner_bytes = page.inner.as_bytes();
+    let capacity = page_capacity::<STRIDE>(page.header.page_id)?;
+    let inner_bytes = page.inner.page_bytes(capacity)?;
     let inner_length = inner_bytes.as_ref().len();
     // An over-budget page must fail here, in its own persist, instead of
     // silently corrupting the neighboring page. The budget is this page's own
@@ -149,7 +150,7 @@ where
             capacity,
         });
     }
-    page.header.data_length = inner_length as u32;
+    page.header.data_length = page.inner.page_data_length(inner_length) as u32;
     let header_bytes = page.header.as_bytes();
     let header_length = header_bytes.as_ref().len();
     file.write_all(header_bytes.as_ref()).await?;
@@ -269,7 +270,8 @@ fn persist_page_in_place_to<T, const STRIDE: u32>(
 where
     T: Persistable + Send + Sync,
 {
-    let inner_bytes = page.inner.as_bytes();
+    let capacity = page_capacity::<STRIDE>(page.header.page_id)?;
+    let inner_bytes = page.inner.page_bytes(capacity)?;
     let inner_length = inner_bytes.as_ref().len();
     // Same budget as the file path: this page's own stride less its header.
     let capacity = page_capacity::<STRIDE>(page.header.page_id)?;
@@ -280,7 +282,7 @@ where
             capacity,
         });
     }
-    page.header.data_length = inner_length as u32;
+    page.header.data_length = page.inner.page_data_length(inner_length) as u32;
     let header_bytes = page.header.as_bytes();
     let header_length = header_bytes.as_ref().len();
     out.extend_from_slice(header_bytes.as_ref());
@@ -331,7 +333,7 @@ pub async fn seek_by_link<const STRIDE: u32>(
 }
 
 pub async fn update_at<const DATA_LENGTH: u32, const STRIDE: u32>(
-    file: &mut impl AsyncWrite,
+    file: &mut impl crate::AsyncFile,
     link: Link,
     new_data: &[u8],
 ) -> crate::error::Result<()> {
@@ -353,8 +355,33 @@ pub async fn update_at<const DATA_LENGTH: u32, const STRIDE: u32>(
         });
     }
 
-    seek_by_link::<STRIDE>(file, link).await?;
-    file.write_all(new_data).await?;
+    let header = parse_general_header_by_index::<STRIDE>(file, link.page_id.into()).await?;
+    if header.page_type != PageType::Data {
+        return Err(Error::Corrupt {
+            what: "data page type",
+        });
+    }
+    let mut payload = vec![0; page_capacity::<STRIDE>(link.page_id)?];
+    file.read_exact(&mut payload).await?;
+    let rows = DataPage::<0>::directory(&payload, header.data_length)?;
+    if !rows
+        .iter()
+        .any(|row| row.offset == link.offset && row.length == link.length)
+    {
+        return Err(Error::Corrupt {
+            what: "row link absent from v3 directory",
+        });
+    }
+    payload[link.offset as usize..][..new_data.len()].copy_from_slice(new_data);
+    let tail = payload.len() - crate::DATA_TRAILER_SIZE;
+    let mut crc = crc32fast::Hasher::new();
+    crc.update(&payload[..tail]);
+    crc.update(&payload[tail + 4..]);
+    payload[tail..tail + 4].copy_from_slice(&crc.finalize().to_le_bytes());
+    seek_to_page_start::<STRIDE>(file, link.page_id.into()).await?;
+    file.seek(SeekFrom::Current(GENERAL_HEADER_SIZE as i64))
+        .await?;
+    file.write_all(&payload).await?;
     Ok(())
 }
 
@@ -365,15 +392,22 @@ pub async fn parse_general_header(
     file.read_exact(&mut buffer).await?;
     // Validated: a header torn by a mid-write death must surface as an error
     // naming the page, not as undefined behavior in whatever reads it next.
-    let archived = crate::access_archived::<<GeneralHeader as Archive>::Archived>(&buffer[..])
-        .map_err(|_| Error::Corrupt {
-            what: "page header",
-        })?;
-    let header =
+    let archived =
+        rkyv::access::<<GeneralHeader as Archive>::Archived, rkyv::rancor::Error>(&buffer[..])
+            .map_err(|_| Error::Corrupt {
+                what: "page header",
+            })?;
+    let header: GeneralHeader =
         rkyv::deserialize::<_, rkyv::rancor::Error>(archived).map_err(|_| Error::Corrupt {
             what: "page header",
         })?;
 
+    if header.data_version != crate::DATA_VERSION {
+        return Err(Error::UnsupportedVersion {
+            found: header.data_version,
+            expected: crate::DATA_VERSION,
+        });
+    }
     Ok(header)
 }
 
@@ -458,7 +492,11 @@ pub async fn parse_general_header_by_index<const STRIDE: u32>(
 ) -> crate::error::Result<GeneralHeader> {
     seek_to_page_start::<STRIDE>(file, index).await?;
     let header = parse_general_header(file).await?;
-
+    if header.page_id != index.into() {
+        return Err(Error::Corrupt {
+            what: "page identity",
+        });
+    }
     Ok(header)
 }
 
@@ -472,7 +510,13 @@ pub async fn parse_data_page<
 ) -> crate::error::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     validate_layout::<STRIDE>(index.into(), INNER_PAGE_SIZE)?;
     seek_to_page_start::<STRIDE>(file, index).await?;
-    parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await
+    let page = parse_data_page_in_place::<STRIDE, INNER_PAGE_SIZE>(file).await?;
+    if page.header.page_id != index.into() {
+        return Err(Error::Corrupt {
+            what: "data page identity",
+        });
+    }
+    Ok(page)
 }
 
 async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: usize>(
@@ -480,7 +524,12 @@ async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: u
 ) -> crate::error::Result<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
     let header = parse_general_header(file).await?;
 
-    let mut buffer = [0u8; INNER_PAGE_SIZE];
+    if header.page_type != PageType::Data {
+        return Err(Error::Corrupt {
+            what: "data page type",
+        });
+    }
+    let mut buffer = vec![0u8; page_capacity::<PAGE_SIZE>(header.page_id)?];
     if header.data_length as usize > INNER_PAGE_SIZE {
         return Err(Error::PageOverflow {
             page: header.page_id,
@@ -488,17 +537,8 @@ async fn parse_data_page_in_place<const PAGE_SIZE: u32, const INNER_PAGE_SIZE: u
             capacity: INNER_PAGE_SIZE,
         });
     }
-    if header.next_id == 0.into() {
-        #[allow(clippy::unused_io_amount)]
-        file.read(&mut buffer).await?;
-    } else {
-        file.read_exact(&mut buffer).await?;
-    }
-
-    let data = DataPage {
-        data: buffer,
-        length: header.data_length,
-    };
+    file.read_exact(&mut buffer).await?;
+    let data = DataPage::decode(&buffer, header.data_length)?;
 
     Ok(GeneralPage {
         header,
@@ -514,24 +554,11 @@ pub async fn parse_data_pages_batch<
     file: &mut impl AsyncRead,
     indexes: Vec<u32>,
 ) -> crate::error::Result<Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>>> {
-    validate_layout::<STRIDE>(0.into(), INNER_PAGE_SIZE)?;
-    let mut iter = indexes.into_iter();
-    if let Some(index) = iter.next() {
-        let mut pages = vec![];
-        seek_to_page_start::<STRIDE>(file, index).await?;
-        let page = parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await?;
-        pages.push(page);
-
-        for index in iter {
-            seek_to_page_start::<STRIDE>(file, index).await?;
-            let page = parse_data_page_in_place::<PAGE_SIZE, INNER_PAGE_SIZE>(file).await?;
-            pages.push(page);
-        }
-
-        Ok(pages)
-    } else {
-        Ok(vec![])
+    let mut pages = Vec::with_capacity(indexes.len());
+    for index in indexes {
+        pages.push(parse_data_page::<PAGE_SIZE, INNER_PAGE_SIZE, STRIDE>(file, index).await?);
     }
+    Ok(pages)
 }
 
 // pub fn parse_data_record<const PAGE_SIZE: usize>(
@@ -693,6 +720,7 @@ mod tests {
         let mut data = [0u8; INNER_PAGE_SIZE];
         data[..marker.len()].copy_from_slice(marker);
         DataPage {
+            rows: Vec::new(),
             length: marker.len() as u32,
             data,
         }
@@ -768,13 +796,8 @@ mod tests {
         drop(file);
 
         let bytes = std::fs::read(&path).unwrap();
-        // The last page is not padded, exactly as writing one at a time leaves
-        // it: page four's offset, its header, and its five bytes of marker.
-        assert_eq!(
-            bytes.len(),
-            4 * PAGE_SIZE + crate::GENERAL_HEADER_SIZE + b"fifth".len(),
-            "the file is the wrong length"
-        );
+        // The v3 directory occupies the tail even on a partly filled page.
+        assert_eq!(bytes.len(), 5 * PAGE_SIZE, "the file is the wrong length");
         let marker_at = |page: usize, marker: &[u8]| {
             let from = page * PAGE_SIZE + crate::GENERAL_HEADER_SIZE;
             assert_eq!(
@@ -859,6 +882,7 @@ mod tests {
                 data_length: 0,
             },
             inner: DataPage {
+                rows: Vec::new(),
                 length: OVERSIZED as u32,
                 data: [7u8; OVERSIZED],
             },
@@ -884,6 +908,52 @@ mod tests {
 
         drop(file);
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_at_preserves_v3_directory_and_checksum() {
+        let (path, mut file) = scratch("update_v3").await;
+        let link = crate::Link {
+            page_id: 1.into(),
+            offset: 0,
+            length: 8,
+        };
+        let mut data = DataPage::<INNER_PAGE_SIZE>::new();
+        data.update_at(link, b"original").unwrap();
+        let mut page = GeneralPage {
+            header: GeneralHeader::new(1.into(), PageType::Data, 0.into()),
+            inner: data,
+        };
+        super::persist_page::<_, DEFAULT_PAGE_STRIDE>(&mut page, &mut file)
+            .await
+            .unwrap();
+        super::update_at::<{ INNER_PAGE_SIZE as u32 }, DEFAULT_PAGE_STRIDE>(
+            &mut file,
+            link,
+            b"replaced",
+        )
+        .await
+        .unwrap();
+        let decoded =
+            super::parse_data_page::<DEFAULT_PAGE_STRIDE, INNER_PAGE_SIZE, DEFAULT_PAGE_STRIDE>(
+                &mut file, 1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(&decoded.inner.data[..8], b"replaced");
+        assert_eq!(decoded.inner.rows, page.inner.rows);
+        let missing = crate::Link { offset: 8, ..link };
+        assert!(
+            super::update_at::<{ INNER_PAGE_SIZE as u32 }, DEFAULT_PAGE_STRIDE>(
+                &mut file,
+                missing,
+                b"missing!"
+            )
+            .await
+            .is_err()
+        );
+        drop(file);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[tokio::test]
@@ -1002,6 +1072,7 @@ mod tests {
                 data_length: 0,
             },
             inner: DataPage {
+                rows: Vec::new(),
                 length: marker.len() as u32,
                 data,
             },

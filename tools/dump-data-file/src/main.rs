@@ -1,103 +1,67 @@
 use clap::Parser;
-use data_bucket::{
-    page::{parse_space_info, DataIterator, LinksIterator, PageIterator},
-    persistence::data::DataTypeValue,
-    read_data_pages, PAGE_SIZE,
-};
-use std::{fs::File, str};
+use data_bucket::{parse_data_page, parse_general_header_by_index, PageType, GENERAL_HEADER_SIZE};
 
 #[derive(Parser, Debug)]
+#[command(about = "Inspect v3 page identities and live row extents without reading any index")]
 struct Args {
     #[arg(short, long)]
     filename: String,
+    #[arg(long, default_value_t = 16384)]
+    page_size: u32,
+    /// Include each live row archive as hexadecimal bytes. Row decoding belongs to the owning schema.
+    #[arg(long)]
+    hex: bool,
 }
 
-fn print_horizontal_cells_delimiters(column_widths: &[usize]) {
-    print!("+");
-    for column_width in column_widths.iter() {
-        print!("-");
-        for _ in 0..*column_width {
-            print!("-");
+async fn dump<const STRIDE: u32, const CAPACITY: usize>(args: &Args) -> eyre::Result<()> {
+    let file = std::fs::File::open(&args.filename)?;
+    let length = file.metadata()?.len();
+    let mut file = nagoya::io::HostFile::new(file);
+    let mut rows = 0usize;
+    for id in 0..length.div_ceil(u64::from(STRIDE)) {
+        let id = u32::try_from(id)?;
+        let header = parse_general_header_by_index::<STRIDE>(&mut file, id).await?;
+        println!(
+            "page {}: {:?}, format {}, initialized {}",
+            id, header.page_type, header.data_version, header.data_length
+        );
+        if header.page_type != PageType::Data {
+            continue;
         }
-        print!("-+");
-    }
-    println!();
-}
-
-fn print_padded_string(string: &str, column_width: usize) {
-    print!("{}", string);
-    for _ in 0..column_width - string.len() {
-        print!(" ");
-    }
-}
-
-fn format_table(header: &Vec<String>, rows: &Vec<Vec<String>>) {
-    let mut column_widths = vec![0; header.len()];
-    for i in 0..header.len() {
-        column_widths[i] = header[i].len();
-    }
-    for row in rows.iter() {
-        for i in 0..row.len() {
-            if row[i].len() > column_widths[i] {
-                column_widths[i] = row[i].len();
+        let page = parse_data_page::<STRIDE, CAPACITY, STRIDE>(&mut file, id).await?;
+        for slot in page.inner.rows {
+            rows += 1;
+            print!(
+                "  row offset={} length={} file_offset={}",
+                slot.offset,
+                slot.length,
+                u64::from(id) * u64::from(STRIDE)
+                    + GENERAL_HEADER_SIZE as u64
+                    + u64::from(slot.offset)
+            );
+            if args.hex {
+                print!(" bytes=");
+                for byte in &page.inner.data[slot.offset as usize..][..slot.length as usize] {
+                    print!("{byte:02x}");
+                }
             }
+            println!();
         }
     }
-
-    print_horizontal_cells_delimiters(&column_widths[..]);
-    print!("|");
-    for i in 0..header.len() {
-        print!(" ");
-        print_padded_string(header[i].as_str(), column_widths[i]);
-        print!(" |");
-    }
-    println!();
-    print_horizontal_cells_delimiters(&column_widths[..]);
-    for row in rows.iter() {
-        print!("|");
-        for i in 0..row.len() {
-            print!(" ");
-            print_padded_string(row[i].as_str(), column_widths[i]);
-            print!(" |");
-        }
-        println!();
-    }
-    print_horizontal_cells_delimiters(&column_widths[..]);
+    println!("live rows: {rows}");
+    Ok(())
 }
 
 fn main() -> eyre::Result<()> {
     let args = Args::parse();
-    let mut file = File::open(args.filename)?;
-
-    let space_info = parse_space_info::<PAGE_SIZE>(&mut file)?;
-    let row_schema = space_info.row_schema.clone();
-
-    let mut rows: Vec<Vec<DataTypeValue>> = vec![];
-
-    let pages = PageIterator::new(space_info.primary_key_intervals.clone());
-    for page in pages {
-        let links = LinksIterator::new(&mut file, page, &space_info).collect::<Vec<_>>();
-        for row in DataIterator::new(&mut file, row_schema.clone(), links) {
-            rows.push(row?);
+    nagoya::block_on(async {
+        match args.page_size {
+            512 => dump::<512, { 512 - GENERAL_HEADER_SIZE }>(&args).await,
+            4096 => dump::<4096, { 4096 - GENERAL_HEADER_SIZE }>(&args).await,
+            8192 => dump::<8192, { 8192 - GENERAL_HEADER_SIZE }>(&args).await,
+            16384 => dump::<16384, { 16384 - GENERAL_HEADER_SIZE }>(&args).await,
+            32768 => dump::<32768, { 32768 - GENERAL_HEADER_SIZE }>(&args).await,
+            _ => eyre::bail!("supported page sizes: 512, 4096, 8192, 16384, 32768"),
         }
-    }
-
-    let rows: Vec<Vec<DataTypeValue>> = read_data_pages::<PAGE_SIZE>(&mut file)?;
-
-    let header: Vec<String> = row_schema
-        .iter()
-        .map(|(column, _data_type)| column.to_owned())
-        .collect();
-    let rows: Vec<Vec<String>> = rows
-        .iter()
-        .map(|row| {
-            row.iter()
-                .map(|column| column.to_string())
-                .collect::<Vec<String>>()
-        })
-        .collect();
-
-    format_table(&header, &rows);
-
-    Ok(())
+    })
 }

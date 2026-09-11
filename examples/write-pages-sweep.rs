@@ -36,6 +36,7 @@ fn pages(count: usize) -> Vec<GeneralPage<DataPage<INNER_PAGE_SIZE>>> {
                     data_length: 0,
                 },
                 inner: DataPage {
+                    rows: Vec::new(),
                     length: INNER_PAGE_SIZE as u32,
                     data,
                 },

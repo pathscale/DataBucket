@@ -4,6 +4,11 @@ use data_bucket::{
 use nagoya::io::{Error, Read, Seek, SeekFrom, Write};
 
 struct NoIo;
+impl Read for NoIo {
+    async fn read(&mut self, _: &mut [u8]) -> Result<usize, Error> {
+        panic!("invalid layout reached read")
+    }
+}
 impl Seek for NoIo {
     async fn seek(&mut self, _: SeekFrom) -> Result<u64, Error> {
         panic!("invalid layout reached seek")
@@ -22,6 +27,7 @@ fn page() -> GeneralPage<DataPage<32>> {
     GeneralPage {
         header: GeneralHeader::new(1.into(), PageType::Data, 0.into()),
         inner: DataPage {
+            rows: Vec::new(),
             data: [0; 32],
             length: 1,
         },

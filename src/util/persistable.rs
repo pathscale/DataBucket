@@ -13,6 +13,17 @@ use rkyv::{Archive, Deserialize, Serialize};
 pub trait Persistable {
     fn as_bytes(&self) -> impl AsRef<[u8]> + Send;
     fn from_bytes(bytes: &[u8], version: u32) -> Self;
+
+    /// Encode within the payload of a physical page. Data pages use the
+    /// supplied capacity to place their directory at the fixed page tail.
+    fn page_bytes(&self, _capacity: usize) -> crate::error::Result<impl AsRef<[u8]> + Send> {
+        Ok(self.as_bytes())
+    }
+
+    /// Initialized row extent for data pages; encoded length for other pages.
+    fn page_data_length(&self, encoded_length: usize) -> usize {
+        encoded_length
+    }
 }
 
 /*
