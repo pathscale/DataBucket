@@ -12,7 +12,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 use crate::{align, SizeMeasurable};
 
-pub use data::DataPage;
+pub use data::{data_page_row_capacity, DataPage, RowSlot, DATA_TRAILER_SIZE, ROW_SLOT_SIZE};
 pub use header::{GeneralHeader, DATA_VERSION};
 pub use index::{
     get_index_page_size_from_data_length, IndexPage, IndexPageUtility, IndexValue,

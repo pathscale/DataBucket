@@ -25,6 +25,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// A refusal, with the numbers that justify it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
+    /// The runtime never interprets another page format as the current one.
+    UnsupportedVersion { found: u32, expected: u32 },
     /// A write's length does not match the link it was given.
     ///
     /// A `Link` names an exact byte range, so a write of another size is not
@@ -100,6 +102,10 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         match self {
+            Self::UnsupportedVersion { found, expected } => write!(
+                formatter,
+                "unsupported page format v{found}; this build requires v{expected}; recreate the store or convert it with an explicit migration tool"
+            ),
             Self::LinkLengthMismatch { expected, found } => write!(
                 formatter,
                 "a {found} byte write does not match its {expected} byte link"

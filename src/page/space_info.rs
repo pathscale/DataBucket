@@ -140,10 +140,11 @@ where
                 let v1 = SpaceInfoPageV1::from_bytes(bytes, version);
                 v1.into()
             }
-            _ => {
+            2 | 3 => {
                 let v2 = SpaceInfoPageV2::from_bytes(bytes, version);
                 v2.into()
             }
+            _ => panic!("unsupported space-info page version {version}"),
         }
     }
 }

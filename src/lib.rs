@@ -56,13 +56,14 @@ pub use link::Link;
 
 pub use data_bucket_codegen::{SizeMeasure, VariableSizeMeasure};
 pub use page::{
-    get_index_page_size_from_data_length, map_data_pages_to_general, parse_data_page,
-    parse_data_pages_batch, parse_general_header_by_index, parse_page, parse_pages_batch,
-    persist_page, persist_pages_batch, seek_by_link, seek_to_page_start, update_at, DataPage,
-    GeneralHeader, GeneralPage, IndexPage, IndexPageUtility, IndexValue, Interval,
-    PageOverflowError, PageType, SpaceInfoPage, TableOfContentsOverflowError, TableOfContentsPage,
-    UnsizedIndexPage, UnsizedIndexPageUtility, DATA_VERSION, DEFAULT_PAGE_STRIDE,
-    EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE, GENERAL_HEADER_SIZE, INNER_PAGE_SIZE, PAGE_SIZE,
+    data_page_row_capacity, get_index_page_size_from_data_length, map_data_pages_to_general,
+    parse_data_page, parse_data_pages_batch, parse_general_header_by_index, parse_page,
+    parse_pages_batch, persist_page, persist_pages_batch, seek_by_link, seek_to_page_start,
+    update_at, DataPage, GeneralHeader, GeneralPage, IndexPage, IndexPageUtility, IndexValue,
+    Interval, PageOverflowError, PageType, RowSlot, SpaceInfoPage, TableOfContentsOverflowError,
+    TableOfContentsPage, UnsizedIndexPage, UnsizedIndexPageUtility, DATA_TRAILER_SIZE,
+    DATA_VERSION, DEFAULT_PAGE_STRIDE, EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE, GENERAL_HEADER_SIZE,
+    INNER_PAGE_SIZE, PAGE_SIZE, ROW_SLOT_SIZE,
 };
 pub use persistence::{PersistableIndex, PersistableTable};
 pub use space::Id as SpaceId;

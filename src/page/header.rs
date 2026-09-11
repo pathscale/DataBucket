@@ -9,7 +9,7 @@ use crate::space;
 use crate::util::Persistable;
 use crate::PAGE_SIZE;
 
-pub const DATA_VERSION: u32 = 2u32;
+pub const DATA_VERSION: u32 = 3;
 
 /// Header that appears on every page before it's inner data.
 #[derive(
