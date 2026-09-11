@@ -29,6 +29,11 @@ The table schema version and crate package version are separate from the
 page-format version. WorkTable's Vec snapshot files use a different container
 and cannot be treated as ordinary DataBucket space files.
 
+CRC validation detects damaged data pages; it does not provide a transaction
+log, atomic multi-file commits or crash repair. WorkTable owns synchronization
+and durability policy. DataBucket itself still requires Rust std, despite its
+portable I/O traits.
+
 ## Command line tools
 
 Create a sample file containing 2,500 records. An existing file is refused:
