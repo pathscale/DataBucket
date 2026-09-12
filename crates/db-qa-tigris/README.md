@@ -9,10 +9,13 @@ under a unique `db-qa/` prefix, verifies every read, checks conditional object
 writes, deletes its objects and emits one `DB_QA_S3_JSON=` record. Its page
 size comes from `data_bucket::PAGE_SIZE`.
 
-The container is one static Rust binary in a scratch image. The benchmark's
-parallel request machinery stays in this crate. DataBucket's production S3
-adapter is optional behind `s3-support`, while its default dependency graph
-continues to compile without `std`.
+The manual `Remote store QA` workflow builds the musl executable directly on
+an Ubicloud runner. Buildah then creates a scratch image containing only that
+executable and pushes it to the selected disposable Fly application. Rust is
+never installed or run inside an image. The benchmark's parallel request
+machinery stays in this crate. DataBucket's production S3 adapter is optional
+behind `s3-support`, while its default dependency graph continues to compile
+without `std`.
 
 Required environment variables are `DB_QA_PROVIDER`, `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY`. The endpoint, region and bucket may use the generic
