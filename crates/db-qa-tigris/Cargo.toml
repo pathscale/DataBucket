@@ -1,0 +1,14 @@
+[package]
+name = "db-qa-tigris"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+data_bucket = { path = "../.." }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-webpki-roots"] }
+rusty-s3 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
