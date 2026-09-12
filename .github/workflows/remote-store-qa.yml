@@ -1,0 +1,114 @@
+name: Remote store QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      driver:
+        description: QA executable to deploy
+        required: true
+        type: choice
+        options:
+          - db-qa-tigris
+          - db-qa-upstash
+      fly_app:
+        description: Existing disposable Fly application
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubicloud-standard-4
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image identity
+        run: |
+          VERSION=$(git rev-parse --short HEAD)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "QA_BINARY=${{ inputs.driver }}" >> "$GITHUB_ENV"
+          echo "FLY_REGISTRY=registry.fly.io" >> "$GITHUB_ENV"
+          echo "FLY_APP=${{ inputs.fly_app }}" >> "$GITHUB_ENV"
+
+      - name: Cache apt
+        uses: ubicloud/cache@v4
+        with:
+          path: /var/cache/apt/archives/
+          key: apt-${{ runner.os }}
+          restore-keys: apt-
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y musl-dev musl-tools
+
+      - name: Fix apt cache permissions
+        run: sudo chmod -R 644 /var/cache/apt/archives/* && sudo chown -R "$USER" /var/cache/apt/archives
+
+      - name: Set up Rust toolchain
+        run: |
+          rustup default stable
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Cache Cargo registry
+        uses: ubicloud/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git
+          key: cargo-registry-1-${{ runner.os }}
+          restore-keys: cargo-registry-1-
+
+      - name: Set up cargo sweep
+        run: command -v cargo-sweep >/dev/null 2>&1 || cargo install cargo-sweep
+
+      - name: Cache target dependencies
+        uses: ubicloud/cache@v4
+        with:
+          path: |
+            /home/runner/target/release/deps
+            /home/runner/target/release/.fingerprint
+            /home/runner/target/release/build
+            /home/runner/target/x86_64-unknown-linux-musl/release/deps
+            /home/runner/target/x86_64-unknown-linux-musl/release/.fingerprint
+            /home/runner/target/x86_64-unknown-linux-musl/release/build
+          key: db-qa-musl-deps-${{ runner.os }}-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: db-qa-musl-deps-${{ runner.os }}-
+
+      - name: Build musl binary
+        env:
+          CARGO_INCREMENTAL: "1"
+          CARGO_TARGET_DIR: /home/runner/target
+        run: |
+          cargo sweep --stamp
+          cargo build --release --target x86_64-unknown-linux-musl \
+            --manifest-path "crates/$QA_BINARY/Cargo.toml"
+          cargo sweep --file
+          cp "/home/runner/target/x86_64-unknown-linux-musl/release/$QA_BINARY" "./$QA_BINARY"
+
+      - name: Build scratch image with Buildah
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: ${{ env.FLY_REGISTRY }}/${{ env.FLY_APP }}
+          tags: ${{ env.VERSION }} latest
+          base-image: scratch
+          content: ./${{ env.QA_BINARY }}
+          entrypoint: /${{ env.QA_BINARY }}
+
+      - name: Log in to Fly registry
+        run: buildah login -u x -p "${{ secrets.FLY_API_TOKEN }}" "$FLY_REGISTRY"
+
+      - name: Push image
+        run: buildah push --compression-format gzip --remove-signatures "$FLY_REGISTRY/$FLY_APP:$VERSION"
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy image to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --app "$FLY_APP" --detach --ha=false --image "$FLY_REGISTRY/$FLY_APP:$VERSION"
