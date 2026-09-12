@@ -1,6 +1,13 @@
+use aws_credential_types::Credentials;
+use aws_sigv4::http_request::{
+    PayloadChecksumKind, PercentEncodingMode, SignableBody, SignableRequest, SigningSettings,
+    UriPathNormalizationMode, sign,
+};
+use aws_sigv4::sign::v4;
 use reqwest::blocking::Client;
 use reqwest::header::{ETAG, IF_MATCH, IF_NONE_MATCH, RANGE};
-use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
+use reqwest::{Method, Url};
+use rusty_s3::{Bucket, S3Action, UrlStyle};
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -12,7 +19,6 @@ type DynError = Box<dyn Error + Send + Sync>;
 type Result<T> = std::result::Result<T, DynError>;
 
 const USER_AGENT: &str = "db-qa-tigris/0.1";
-const SIGNED_FOR: Duration = Duration::from_secs(3600);
 
 #[derive(Serialize)]
 struct Report {
@@ -119,6 +125,7 @@ struct Harness {
     client: Client,
     bucket: Bucket,
     credentials: Credentials,
+    region: String,
     prefix: String,
     keys: RwLock<BTreeSet<String>>,
 }
@@ -126,52 +133,35 @@ struct Harness {
 impl Harness {
     fn put(&self, key: &str, body: &[u8]) -> Result<Duration> {
         self.track(key);
-        let url = self
-            .bucket
-            .put_object(Some(&self.credentials), key)
-            .sign(SIGNED_FOR);
+        let url = self.bucket.put_object(None, key).sign(Duration::ZERO);
         let started = Instant::now();
-        self.client
-            .put(url)
-            .body(body.to_vec())
-            .send()?
-            .error_for_status()?;
+        checked(self.send(Method::PUT, url, &[], body)?)?;
         Ok(started.elapsed())
     }
 
     fn get(&self, key: &str) -> Result<(Vec<u8>, Duration)> {
-        let url = self
-            .bucket
-            .get_object(Some(&self.credentials), key)
-            .sign(SIGNED_FOR);
+        let url = self.bucket.get_object(None, key).sign(Duration::ZERO);
         let started = Instant::now();
-        let body = self.client.get(url).send()?.error_for_status()?.bytes()?;
+        let body = checked(self.send(Method::GET, url, &[], &[])?)?
+            .bytes()
+            .map_err(reqwest::Error::without_url)?;
         Ok((body.to_vec(), started.elapsed()))
     }
 
     fn range_get(&self, key: &str, first: usize, last: usize) -> Result<(Vec<u8>, Duration)> {
-        let url = self
-            .bucket
-            .get_object(Some(&self.credentials), key)
-            .sign(SIGNED_FOR);
+        let url = self.bucket.get_object(None, key).sign(Duration::ZERO);
+        let range = format!("bytes={first}-{last}");
         let started = Instant::now();
-        let body = self
-            .client
-            .get(url)
-            .header(RANGE, format!("bytes={first}-{last}"))
-            .send()?
-            .error_for_status()?
-            .bytes()?;
+        let body = checked(self.send(Method::GET, url, &[(RANGE, &range)], &[])?)?
+            .bytes()
+            .map_err(reqwest::Error::without_url)?;
         Ok((body.to_vec(), started.elapsed()))
     }
 
     fn head(&self, key: &str) -> Result<(String, Duration)> {
-        let url = self
-            .bucket
-            .head_object(Some(&self.credentials), key)
-            .sign(SIGNED_FOR);
+        let url = self.bucket.head_object(None, key).sign(Duration::ZERO);
         let started = Instant::now();
-        let response = self.client.head(url).send()?.error_for_status()?;
+        let response = checked(self.send(Method::HEAD, url, &[], &[])?)?;
         let elapsed = started.elapsed();
         let etag = response
             .headers()
@@ -190,16 +180,9 @@ impl Harness {
         value: &str,
     ) -> Result<u16> {
         self.track(key);
-        let url = self
-            .bucket
-            .put_object(Some(&self.credentials), key)
-            .sign(SIGNED_FOR);
+        let url = self.bucket.put_object(None, key).sign(Duration::ZERO);
         Ok(self
-            .client
-            .put(url)
-            .header(header, value)
-            .body(body.to_vec())
-            .send()?
+            .send(Method::PUT, url, &[(header, value)], body)?
             .status()
             .as_u16())
     }
@@ -212,22 +195,93 @@ impl Harness {
         let keys: Vec<_> = self.keys.read().unwrap().iter().cloned().collect();
         let mut deleted = 0;
         for key in keys {
-            let url = self
-                .bucket
-                .delete_object(Some(&self.credentials), &key)
-                .sign(SIGNED_FOR);
+            let url = self.bucket.delete_object(None, &key).sign(Duration::ZERO);
             if self
-                .client
-                .delete(url)
-                .send()
-                .and_then(reqwest::blocking::Response::error_for_status)
-                .is_ok()
+                .send(Method::DELETE, url, &[], &[])
+                .is_ok_and(|r| r.status().is_success())
             {
                 deleted += 1;
             }
         }
         deleted
     }
+
+    fn send(
+        &self,
+        method: Method,
+        url: Url,
+        headers: &[(reqwest::header::HeaderName, &str)],
+        body: &[u8],
+    ) -> Result<reqwest::blocking::Response> {
+        let mut request = self
+            .client
+            .request(method, url)
+            .headers(
+                headers
+                    .iter()
+                    .map(|(name, value)| {
+                        Ok((name.clone(), reqwest::header::HeaderValue::from_str(value)?))
+                    })
+                    .collect::<Result<_>>()?,
+            )
+            .body(body.to_vec())
+            .build()
+            .map_err(reqwest::Error::without_url)?;
+        let identity = self.credentials.clone().into();
+        let mut settings = SigningSettings::default();
+        settings.percent_encoding_mode = PercentEncodingMode::Single;
+        settings.uri_path_normalization_mode = UriPathNormalizationMode::Disabled;
+        settings.payload_checksum_kind = PayloadChecksumKind::XAmzSha256;
+        let params: aws_sigv4::http_request::SigningParams<'_> = v4::SigningParams::builder()
+            .identity(&identity)
+            .region(&self.region)
+            .name("s3")
+            .time(SystemTime::now())
+            .settings(settings)
+            .build()?
+            .into();
+        let header_values = request
+            .headers()
+            .iter()
+            .map(|(name, value)| Ok((name.as_str(), value.to_str()?)))
+            .collect::<Result<Vec<_>>>()?;
+        let signable = SignableRequest::new(
+            request.method().as_str(),
+            request.url().as_str(),
+            header_values.iter().copied(),
+            SignableBody::Bytes(body),
+        )?;
+        let (instructions, _) = sign(signable, &params)?.into_parts();
+        for (name, value) in instructions.headers() {
+            request.headers_mut().insert(
+                reqwest::header::HeaderName::from_bytes(name.as_bytes())?,
+                reqwest::header::HeaderValue::from_str(value)?,
+            );
+        }
+        self.client
+            .execute(request)
+            .map_err(reqwest::Error::without_url)
+            .map_err(Into::into)
+    }
+}
+
+fn checked(response: reqwest::blocking::Response) -> Result<reqwest::blocking::Response> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(response);
+    }
+    let body = response.text().unwrap_or_default();
+    let code = xml_tag(&body, "Code").unwrap_or("unknown");
+    let message = xml_tag(&body, "Message").unwrap_or("no provider message");
+    Err(format!("S3 request failed with HTTP {status} ({code}): {message}").into())
+}
+
+fn xml_tag<'a>(body: &'a str, tag: &str) -> Option<&'a str> {
+    let start_tag = format!("<{tag}>");
+    let end_tag = format!("</{tag}>");
+    let start = body.find(&start_tag)? + start_tag.len();
+    let end = body[start..].find(&end_tag)? + start;
+    Some(&body[start..end])
 }
 
 fn main() {
@@ -263,10 +317,14 @@ fn run() -> Result<()> {
     let harness = Harness {
         client,
         bucket,
-        credentials: match session_token {
-            Some(token) => Credentials::new_with_token(access_key, secret_key, token),
-            None => Credentials::new(access_key, secret_key),
-        },
+        credentials: Credentials::new(
+            access_key,
+            secret_key,
+            session_token,
+            None,
+            "db-qa-tigris environment",
+        ),
+        region: region.clone(),
         prefix: unique_prefix()?,
         keys: RwLock::new(BTreeSet::new()),
     };
