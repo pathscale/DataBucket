@@ -33,6 +33,36 @@ CRC validation detects damaged data pages; it does not provide a transaction
 log, atomic multi-file commits or crash repair. WorkTable owns synchronization
 and durability policy.
 
+## Storage domains
+
+`storage::StorageDomain` groups every table and index page in one database-wide
+generation. `begin_generation()` returns a builder for page puts, page deletes
+and semantic catalog changes. `commit_generation()` stages immutable page
+objects, prepares the system catalog, writes its checkpoint, conditionally
+advances the small bootstrap head, and only then publishes the prepared catalog
+in memory. A failed stage or conflicting head leaves the preceding catalog
+visible.
+
+DataBucket defines the bounded catalog records and the `SystemCatalog` provider
+interface. WorkTable supplies the provider as a generated table. This keeps the
+Cargo dependency one-way while DataBucket retains the only catalog write permit
+at runtime. Applications query WorkTable's read-only catalog view.
+
+`storage::PageStore` supplies restart, range-read, stage and conditional commit
+operations. With `s3-support`, `storage::s3::S3PageStore` implements that
+contract for Tigris and compatible S3 services. Data pages are stored in
+content-addressed segments. Adjacent dirty pages may coalesce up to 4 MiB, but
+the target is never a minimum. One changed page remains one page-sized data
+upload.
+
+The generated catalog checkpoint is also divided into content-addressed
+`PAGE_SIZE` chunks. A mutation uploads only changed catalog chunks, a compact
+chunk manifest and the bootstrap head. Catalog rows use stable tombstones so a
+delete does not shift every later row and turn a small mutation into a complete
+catalog upload. `StorageDomain::open` restores the committed catalog before any
+page lookup, and `read_page` resolves a logical page through that catalog and
+issues one bounded range read.
+
 The library is `no_std` with `alloc`, including its default `validate-reads`
 feature. It uses Nagoya's portable I/O traits and requires an allocator. The
 concurrent index dependency uses OS services through libc on supported targets;
