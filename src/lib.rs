@@ -2,7 +2,7 @@
 
 #[macro_use]
 extern crate alloc;
-#[cfg(test)]
+#[cfg(any(test, feature = "std"))]
 extern crate std;
 
 // The Persistable derive emits paths through the crate name, and this crate
@@ -33,17 +33,19 @@ pub mod link;
 pub mod page;
 pub mod persistence;
 pub mod space;
+pub mod storage;
 pub mod util;
 
 pub use link::Link;
 
 pub use data_bucket_codegen::{SizeMeasure, VariableSizeMeasure};
 pub use page::{
-    data_page_row_capacity, get_index_page_size_from_data_length, map_data_pages_to_general,
-    parse_data_page, parse_data_pages_batch, parse_general_header_by_index, parse_page,
-    parse_pages_batch, persist_page, persist_pages_batch, seek_by_link, seek_to_page_start,
-    update_at, DataPage, GeneralHeader, GeneralPage, IndexPage, IndexPageUtility, IndexValue,
-    Interval, PageOverflowError, PageType, RowSlot, SpaceInfoPage, TableOfContentsOverflowError,
+    data_page_row_capacity, get_index_page_size_from_data_length, inspect_data_page_image,
+    inspect_page_image_header, map_data_pages_to_general, parse_data_page, parse_data_pages_batch,
+    parse_general_header_by_index, parse_page, parse_pages_batch, persist_page,
+    persist_pages_batch, seek_by_link, seek_to_page_start, update_at, DataPage, DataPageImageFacts,
+    GeneralHeader, GeneralPage, IndexPage, IndexPageUtility, IndexValue, Interval, PageId,
+    PageOverflowError, PageType, RowSlot, SpaceInfoPage, TableOfContentsOverflowError,
     TableOfContentsPage, UnsizedIndexPage, UnsizedIndexPageUtility, DATA_TRAILER_SIZE,
     DATA_VERSION, DEFAULT_PAGE_STRIDE, EMPTY_TABLE_OF_CONTENTS_PAGE_SIZE, GENERAL_HEADER_SIZE,
     INNER_PAGE_SIZE, PAGE_SIZE, ROW_SLOT_SIZE,

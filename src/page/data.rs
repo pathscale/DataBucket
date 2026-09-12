@@ -21,6 +21,77 @@ pub struct RowSlot {
 pub const ROW_SLOT_SIZE: usize = 8;
 pub const DATA_TRAILER_SIZE: usize = 8;
 
+/// Identity and exact live-row accounting decoded from one complete v3 page.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DataPageImageFacts {
+    pub page_id: crate::page::PageId,
+    pub space_id: crate::SpaceId,
+    pub live_rows: u32,
+    pub live_bytes: u32,
+}
+
+/// Validates a complete encoded v3 data page without knowing its row type.
+pub fn inspect_data_page_image(bytes: &[u8]) -> crate::error::Result<DataPageImageFacts> {
+    let header = inspect_page_image_header(bytes)?;
+    if header.page_type != crate::PageType::Data {
+        return Err(crate::error::Error::Corrupt {
+            what: "data page type",
+        });
+    }
+    let payload = &bytes[crate::GENERAL_HEADER_SIZE..];
+    let rows = DataPage::<0>::directory(payload, header.data_length)?;
+    let live_bytes = rows.iter().try_fold(0_u32, |total, row| {
+        total
+            .checked_add(row.length)
+            .ok_or(crate::error::Error::Corrupt {
+                what: "v3 live row bytes",
+            })
+    })?;
+    let live_rows = u32::try_from(rows.len()).map_err(|_| crate::error::Error::Corrupt {
+        what: "v3 row count",
+    })?;
+    Ok(DataPageImageFacts {
+        page_id: header.page_id,
+        space_id: header.space_id,
+        live_rows,
+        live_bytes,
+    })
+}
+
+/// Validates and decodes the header shared by every complete page image.
+pub fn inspect_page_image_header(bytes: &[u8]) -> crate::error::Result<crate::GeneralHeader> {
+    if bytes.len() < crate::GENERAL_HEADER_SIZE + DATA_TRAILER_SIZE {
+        return Err(crate::error::Error::Corrupt {
+            what: "v3 data page image",
+        });
+    }
+    let header_bytes = &bytes[..crate::GENERAL_HEADER_SIZE];
+    let archived = rkyv::access::<
+        <crate::GeneralHeader as rkyv::Archive>::Archived,
+        rkyv::rancor::Error,
+    >(header_bytes)
+    .map_err(|_| crate::error::Error::Corrupt {
+        what: "page header",
+    })?;
+    let header: crate::GeneralHeader = rkyv::deserialize::<_, rkyv::rancor::Error>(archived)
+        .map_err(|_| crate::error::Error::Corrupt {
+            what: "page header",
+        })?;
+    if header.data_version != crate::DATA_VERSION {
+        return Err(crate::error::Error::UnsupportedVersion {
+            found: header.data_version,
+            expected: crate::DATA_VERSION,
+        });
+    }
+    let payload = &bytes[crate::GENERAL_HEADER_SIZE..];
+    if header.data_length as usize > payload.len() {
+        return Err(crate::error::Error::Corrupt {
+            what: "v3 row extent",
+        });
+    }
+    Ok(header)
+}
+
 /// Row-byte capacity that leaves room for every possible directory entry.
 /// `minimum_row_size` is the size of the archived row wrapper. Variable-size
 /// archives can only be larger. The reservation is independent of row contents

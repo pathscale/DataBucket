@@ -4,7 +4,7 @@ members = ["codegen", "tools/create-data-file", "tools/dump-data-file"]
 
 [package]
 name = "data_bucket"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 authors = ["Handy-caT"]
 license = "MIT"
@@ -24,6 +24,10 @@ indexset = { package = "WorkTablesIndex", version = "^0.0", default-features = f
 # indexset = { package = "wt-indexset", path = "../indexset", version = "^0.12", features = ["concurrent", "cdc", "multimap"] }
 # indexset = { package = "wt-indexset", version = "^0.12", features = ["concurrent", "cdc", "multimap"] }
 nagoya = { version = "^0.1", default-features = false }
+blake3 = { version = "1", optional = true }
+rusty-s3 = { version = "0.10", optional = true }
+ureq = { version = "2", default-features = false, features = ["tls"], optional = true }
+url = { version = "2", optional = true }
 
 [dev-dependencies]
 uuid = { version = "^1", features = ["v4"] }
@@ -36,6 +40,8 @@ async-fs = "2"
 
 [features]
 default = ["validate-reads"]
+std = ["nagoya/std"]
+s3-support = ["std", "dep:blake3", "dep:rusty-s3", "dep:ureq", "dep:url"]
 # Validate archived index and metadata bodies with bytecheck. Header validation
 # and v3 data-page checksums/directories are always checked, including when
 # this feature is disabled.
