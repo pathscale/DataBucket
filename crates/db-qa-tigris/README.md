@@ -30,9 +30,9 @@ doppler run --project api-support-cafe --config dev -- \
     --bin db-qa-r2-session
 ```
 
-`db-qa-r2-session` signs a one-hour child credential locally, restricts it to
-the `db-qa/` prefix and the four object operations used by this harness, and
-imports it into Fly without printing it. The parent secret never leaves the
+`db-qa-r2-session` signs a one-hour child credential locally, restricts its
+object read/write scope to the `db-qa/` prefix, and imports it into Fly without
+printing it. The parent secret never leaves the
 local process. It reads the parent Access Key ID and Secret Access Key from
 hidden prompts. Automation may instead provide the standard `AWS_ACCESS_KEY_ID`
 and `AWS_SECRET_ACCESS_KEY` environment variables, or the namespaced

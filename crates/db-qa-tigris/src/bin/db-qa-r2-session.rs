@@ -32,7 +32,6 @@ struct Paths<'a> {
 struct Claims<'a> {
     bucket: &'a str,
     scope: &'a str,
-    actions: [&'a str; 4],
     paths: Paths<'a>,
     sub: &'a str,
     iss: &'a str,
@@ -74,7 +73,6 @@ fn main() -> Result<()> {
     let claims = Claims {
         bucket: &bucket,
         scope: "object-read-write",
-        actions: ["GetObject", "HeadObject", "PutObject", "DeleteObject"],
         paths: Paths {
             prefix_paths: ["db-qa/"],
             object_paths: [],

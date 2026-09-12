@@ -8,6 +8,8 @@ default-run = "db-qa-tigris"
 [workspace]
 
 [dependencies]
+aws-credential-types = "1"
+aws-sigv4 = "1"
 base64 = "0.23"
 data_bucket = { path = "../.." }
 hmac = "0.13"
