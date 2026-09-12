@@ -3,12 +3,17 @@ name = "db-qa-tigris"
 version = "0.1.0"
 edition = "2024"
 publish = false
+default-run = "db-qa-tigris"
 
 [workspace]
 
 [dependencies]
+base64 = "0.23"
 data_bucket = { path = "../.." }
+hmac = "0.13"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-webpki-roots"] }
+rpassword = "7"
 rusty-s3 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"

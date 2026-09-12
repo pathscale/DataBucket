@@ -244,6 +244,7 @@ fn run() -> Result<()> {
     let bucket_name = env_any(&["S3_BUCKET", "BUCKET_NAME"])?;
     let access_key = env("AWS_ACCESS_KEY_ID")?;
     let secret_key = env("AWS_SECRET_ACCESS_KEY")?;
+    let session_token = std::env::var("AWS_SESSION_TOKEN").ok();
     let (url_style, url_style_name) = match std::env::var("S3_URL_STYLE").as_deref() {
         Ok("virtual") => (UrlStyle::VirtualHost, "virtual"),
         _ => (UrlStyle::Path, "path"),
@@ -262,7 +263,10 @@ fn run() -> Result<()> {
     let harness = Harness {
         client,
         bucket,
-        credentials: Credentials::new(access_key, secret_key),
+        credentials: match session_token {
+            Some(token) => Credentials::new_with_token(access_key, secret_key, token),
+            None => Credentials::new(access_key, secret_key),
+        },
         prefix: unique_prefix()?,
         keys: RwLock::new(BTreeSet::new()),
     };
