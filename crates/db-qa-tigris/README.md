@@ -24,12 +24,10 @@ For Cloudflare R2, keep the parent token local and create a short-lived,
 prefix-scoped credential for the Fly runner:
 
 ```text
-CLOUDFLARE_ACCOUNT_ID=<account-id> \
-S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com \
-S3_BUCKET=<bucket> \
 FLY_APP_NAME=<disposable-app> \
-cargo run --manifest-path crates/db-qa-tigris/Cargo.toml \
-  --bin db-qa-r2-session
+doppler run --project api-support-cafe --config dev -- \
+  cargo run --manifest-path crates/db-qa-tigris/Cargo.toml \
+    --bin db-qa-r2-session
 ```
 
 `db-qa-r2-session` signs a one-hour child credential locally, restricts it to
@@ -37,5 +35,6 @@ the `db-qa/` prefix and the four object operations used by this harness, and
 imports it into Fly without printing it. The parent secret never leaves the
 local process. It reads the parent Access Key ID and Secret Access Key from
 hidden prompts. Automation may instead provide the standard `AWS_ACCESS_KEY_ID`
-and `AWS_SECRET_ACCESS_KEY` environment variables. Set
+and `AWS_SECRET_ACCESS_KEY` environment variables, or the namespaced
+`CAFE__R2__*` variables used by the `api-support-cafe` development config. Set
 `R2_SESSION_TTL_SECONDS` to shorten the lifetime.

@@ -42,12 +42,17 @@ struct Claims<'a> {
 }
 
 fn main() -> Result<()> {
-    let account_id = env("CLOUDFLARE_ACCOUNT_ID")?;
-    let endpoint = env("S3_ENDPOINT")?;
-    let bucket = env("S3_BUCKET")?;
-    let parent_access_key = secret_env_or_prompt("AWS_ACCESS_KEY_ID", "Parent R2 Access Key ID: ")?;
-    let parent_secret =
-        secret_env_or_prompt("AWS_SECRET_ACCESS_KEY", "Parent R2 Secret Access Key: ")?;
+    let account_id = env_any(&["CLOUDFLARE_ACCOUNT_ID", "CAFE__R2__ACCOUNT_ID"])?;
+    let endpoint = env_any(&["S3_ENDPOINT", "CAFE__R2__ENDPOINT"])?;
+    let bucket = env_any(&["S3_BUCKET", "CAFE__R2__BUCKET_NAME"])?;
+    let parent_access_key = secret_env_or_prompt(
+        &["AWS_ACCESS_KEY_ID", "CAFE__R2__ACCESS_KEY_ID"],
+        "Parent R2 Access Key ID: ",
+    )?;
+    let parent_secret = secret_env_or_prompt(
+        &["AWS_SECRET_ACCESS_KEY", "CAFE__R2__SECRET_ACCESS_KEY"],
+        "Parent R2 Secret Access Key: ",
+    )?;
     let fly_app = env("FLY_APP_NAME")?;
     let ttl = std::env::var("R2_SESSION_TTL_SECONDS")
         .map_or(Ok(DEFAULT_TTL_SECONDS), |value| value.parse::<u64>())?;
@@ -120,16 +125,30 @@ fn env(name: &str) -> Result<String> {
     std::env::var(name).map_err(|_| format!("missing required environment variable {name}").into())
 }
 
-fn secret_env_or_prompt(name: &str, prompt: &str) -> Result<String> {
-    match std::env::var(name) {
-        Ok(value) if !value.is_empty() => Ok(value),
-        _ => {
-            let value = rpassword::prompt_password(prompt)?;
-            if value.is_empty() {
-                Err(format!("{name} cannot be empty").into())
-            } else {
-                Ok(value)
-            }
-        }
+fn env_any(names: &[&str]) -> Result<String> {
+    names
+        .iter()
+        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+        .ok_or_else(|| {
+            format!(
+                "missing required environment variable: {}",
+                names.join(" or ")
+            )
+            .into()
+        })
+}
+
+fn secret_env_or_prompt(names: &[&str], prompt: &str) -> Result<String> {
+    if let Some(value) = names
+        .iter()
+        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+    {
+        return Ok(value);
+    }
+    let value = rpassword::prompt_password(prompt)?;
+    if value.is_empty() {
+        Err(format!("{} cannot be empty", names.join(" or ")).into())
+    } else {
+        Ok(value)
     }
 }
